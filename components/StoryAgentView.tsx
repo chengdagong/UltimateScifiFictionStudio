@@ -300,7 +300,7 @@ ${contextText}
                                         rounded-xl border transition-all duration-300
                                         ${isCurrent ? 'bg-white border-indigo-400 shadow-md ring-1 ring-indigo-400' : ''}
                                         ${isPast ? 'bg-white border-slate-200 opacity-80' : ''}
-                                        ${isPending ? 'bg-slate-100 border-slate-200 opacity-50' : ''}
+                                        ${isPending ? 'bg-slate-100 border-slate-200' : ''}
                                     `}>
                                         {/* Step Header */}
                                         <div className="p-3 flex items-start justify-between border-b border-slate-50">
@@ -309,8 +309,8 @@ ${contextText}
                                                     {idx + 1}
                                                 </div>
                                                 <div>
-                                                    <div className="text-sm font-bold text-slate-700">{step.name}</div>
-                                                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                    <div className="text-sm font-bold text-slate-900">{step.name}</div>
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-1">
                                                         <Bot className="w-3 h-3" /> {getAgentById(step.agentId)?.name}
                                                     </div>
                                                 </div>
@@ -344,7 +344,7 @@ ${contextText}
 
                                             {/* Preview Instruction */}
                                             {(!log && isPending) && (
-                                                <div className="text-xs text-slate-500 italic mt-1">{step.instruction}</div>
+                                                <div className="text-xs text-slate-600 italic mt-1">{step.instruction}</div>
                                             )}
 
                                             {/* Reviewer Badge */}
