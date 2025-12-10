@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { BookOpen, Layers, Clock, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Wand2, Globe2, PlusCircle, LayoutTemplate, Activity, Users, BookText, ArrowRight, RefreshCw, Eye, ChevronDown, FileText, UploadCloud, MoreVertical, Trash2, Menu, ArrowLeft, Home, Network, Library, Cpu, PanelLeftClose, PanelLeftOpen, User } from 'lucide-react';
+import { BookOpen, Layers, Clock, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Wand2, Globe2, PlusCircle, LayoutTemplate, Activity, Users, BookText, ArrowRight, RefreshCw, Eye, ChevronDown, FileText, UploadCloud, MoreVertical, Trash2, Menu, ArrowLeft, Home, Network, Library, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle } from 'lucide-react';
 import ParticipantsView from './components/ParticipantsView';
 import TimelineView from './components/TimelineView';
 import ChronicleView from './components/ChronicleView';
 import StoryAgentView from './components/StoryAgentView';
 import TechTreeView from './components/TechTreeView';
 import CharacterCardView from './components/CharacterCardView';
+import BrainstormView from './components/BrainstormView';
 import SettingsModal from './components/SettingsModal';
 import { WorldModel, StorySegment, SocialEntity, EntityCategory, WorldData, ApiSettings, EntityRelationship, EntityState, StoryAgent, WorkflowStep, TechNode, TechDependency } from './types';
 import { generateEntitiesForLayer, generateStorySegment, generateWorldChronicle, importWorldFromText, generateWorldFromScenario, generateRelatedTechNode } from './services/geminiService';
@@ -43,7 +44,7 @@ const WorldGenerationOverlay: React.FC<{ status: string }> = ({ status }) => {
 
 const App: React.FC = () => {
    // App State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters'>('participants');
+   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm'>('participants');
    const [loadingLayer, setLoadingLayer] = useState<string | null>(null);
    const [isSyncing, setIsSyncing] = useState(false);
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -626,6 +627,15 @@ const App: React.FC = () => {
                {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事构建 (Story)</p>}
 
                <button
+                  onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                  title={isMinimalUI ? "头脑风暴" : undefined}
+               >
+                  <MessageCircle className="w-4 h-4" />
+                  {!isMinimalUI && "头脑风暴"}
+               </button>
+
+               <button
                   onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
                   title={isMinimalUI ? "人物卡管理" : undefined}
@@ -682,13 +692,13 @@ const App: React.FC = () => {
                   {isMinimalUI ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
                </button>
             </div>
-         </nav >
+         </nav>
 
          {/* Main Content */}
-         < main className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0" >
+         <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
 
             {/* GLOBAL HEADER */}
-            < header className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20" >
+            <header className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
                <div className="flex items-center gap-6">
                   <div>
                      <h2 className="text-lg font-serif font-bold text-slate-800">{worldName}</h2>
@@ -719,10 +729,10 @@ const App: React.FC = () => {
                      <span>同步世界状态</span>
                   </button>
                </div>
-            </header >
+            </header>
 
             {/* View Container */}
-            < div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50" >
+            <div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50">
                {activeTab === 'participants' && (
                   <ParticipantsView
                      model={model}
@@ -810,6 +820,12 @@ const App: React.FC = () => {
                         onUpdateStorySegment={handleUpdateStorySegment}
                         onRemoveStorySegment={handleRemoveStorySegment}
                      />
+                  )
+               }
+
+               {
+                  activeTab === 'brainstorm' && (
+                     <BrainstormView globalApiSettings={apiSettings} />
                   )
                }
             </div >

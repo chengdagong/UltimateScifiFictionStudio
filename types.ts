@@ -143,3 +143,31 @@ export interface ApiSettings {
   model: string;
   minimalUI?: boolean;
 }
+
+// --- Brainstorm Types ---
+
+export interface BrainstormMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  timestamp: number;
+}
+
+export interface BrainstormConfig {
+  provider: ApiProvider;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  temperature: number;
+  maxOutputTokens?: number;
+  systemInstruction?: string;
+}
+
+export interface BrainstormSession {
+  id: string;
+  name: string;
+  messages: BrainstormMessage[];
+  config: BrainstormConfig;
+  createdAt: number;
+  lastModified: number;
+}
