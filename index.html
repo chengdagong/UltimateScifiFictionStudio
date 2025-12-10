@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>生态叙事 (EcoNarrative)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+              serif: ['"Noto Serif SC"', 'serif'],
+            },
+            colors: {
+              'micro': '#3b82f6', // blue
+              'meso': '#10b981', // green
+              'exo': '#f59e0b', // amber
+              'macro': '#ef4444', // red
+              'chrono': '#8b5cf6', // violet
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #f8fafc;
+      }
+      /* Custom scrollbar for cleaner look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      
+      /* Milkdown specific overrides for light theme paper look */
+      .milkdown .editor {
+        padding: 2rem !important;
+        min-height: 100% !important;
+        background: white !important;
+      }
+      .milkdown {
+        height: 100%;
+        overflow: auto;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0?deps=react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client?deps=react@18.2.0",
+    "lucide-react": "https://esm.sh/lucide-react@0.292.0?external=react,react-dom",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
+    "@milkdown/ctx": "https://esm.sh/@milkdown/ctx@7.3.2?external=react,react-dom",
+    "@milkdown/core": "https://esm.sh/@milkdown/core@7.3.2?external=react,react-dom",
+    "@milkdown/utils": "https://esm.sh/@milkdown/utils@7.3.2?external=react,react-dom",
+    "@milkdown/transformer": "https://esm.sh/@milkdown/transformer@7.3.2?external=react,react-dom",
+    "@milkdown/prose": "https://esm.sh/@milkdown/prose@7.3.2?external=react,react-dom",
+    "@milkdown/prose/state": "https://esm.sh/@milkdown/prose@7.3.2/state?external=react,react-dom",
+    "@milkdown/prose/view": "https://esm.sh/@milkdown/prose@7.3.2/view?external=react,react-dom",
+    "@milkdown/prose/model": "https://esm.sh/@milkdown/prose@7.3.2/model?external=react,react-dom",
+    "@milkdown/prose/transform": "https://esm.sh/@milkdown/prose@7.3.2/transform?external=react,react-dom",
+    "@milkdown/prose/commands": "https://esm.sh/@milkdown/prose@7.3.2/commands?external=react,react-dom",
+    "@milkdown/prose/history": "https://esm.sh/@milkdown/prose@7.3.2/history?external=react,react-dom",
+    "@milkdown/prose/inputrules": "https://esm.sh/@milkdown/prose@7.3.2/inputrules?external=react,react-dom",
+    "@milkdown/prose/keymap": "https://esm.sh/@milkdown/prose@7.3.2/keymap?external=react,react-dom",
+    "@milkdown/prose/schema-list": "https://esm.sh/@milkdown/prose@7.3.2/schema-list?external=react,react-dom",
+    "@milkdown/prose/tables": "https://esm.sh/@milkdown/prose@7.3.2/tables?external=react,react-dom",
+    "@milkdown/preset-commonmark": "https://esm.sh/@milkdown/preset-commonmark@7.3.2?external=react,react-dom",
+    "@milkdown/preset-gfm": "https://esm.sh/@milkdown/preset-gfm@7.3.2?external=react,react-dom",
+    "@milkdown/theme-nord": "https://esm.sh/@milkdown/theme-nord@7.3.2?external=react,react-dom",
+    "@milkdown/plugin-listener": "https://esm.sh/@milkdown/plugin-listener@7.3.2?external=react,react-dom",
+    "@milkdown/plugin-history": "https://esm.sh/@milkdown/plugin-history@7.3.2?external=react,react-dom",
+    "@milkdown/react": "https://esm.sh/@milkdown/react@7.3.2?external=react,react-dom",
+    "d3": "https://esm.sh/d3@7.9.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
