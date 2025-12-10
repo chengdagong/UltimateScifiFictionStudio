@@ -4,7 +4,8 @@ import {
     Bot, GitMerge, Play, Edit, Trash2,
     Sparkles, Loader2,
     CheckCircle2, BookOpen, X,
-    Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock
+    Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock,
+    ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react';
 import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment } from '../types';
 import { executeAgentTask, executeReviewTask } from '../services/geminiService';
@@ -39,11 +40,12 @@ interface StepExecutionLog {
 }
 
 const DEFAULT_AGENTS: StoryAgent[] = [
-    { id: 'architect', name: '情节架构师', role: 'Plot Architect', systemPrompt: '你是一位精通叙事结构的小说架构师。你的任务是设计核心冲突、转折点和悬念。你需要确保故事符合逻辑且扣人心弦。', color: 'bg-indigo-500', icon: 'Box' },
-    { id: 'writer', name: '文学撰稿人', role: 'Prose Writer', systemPrompt: '你是一位文笔优美的小说家。你的任务是将大纲转化为生动的场景描写、对话和心理活动。你的文字应具有感染力。', color: 'bg-pink-500', icon: 'Pen' },
-    { id: 'sociologist', name: '社会观察员', role: 'Social Analyst', systemPrompt: '你是一位社会学家，专注于布伦纳生态系统或马克思主义分析。你的任务是确保故事中的事件深刻反映了社会结构、阶级矛盾或系统性压迫。', color: 'bg-blue-500', icon: 'Eye' },
-    { id: 'historian', name: '历史记录官', role: 'Chronicler', systemPrompt: '你负责以客观、宏大的笔触记录事件，关注事件的深远影响和历史必然性。', color: 'bg-amber-500', icon: 'Scroll' },
-    { id: 'editor', name: '主编', role: 'Editor', systemPrompt: '你是一位严厉但公正的文学编辑。你负责审查稿件的质量、逻辑一致性和风格。你会给出具体的修改意见。', color: 'bg-red-500', icon: 'CheckCircle2' }
+    { id: 'screenwriter', name: '编剧 (Screenwriter)', role: 'Screenwriter', systemPrompt: '你是一位好莱坞职业编剧，精通《救猫咪》和《故事》等经典理论。你的任务是根据三幕式结构撰写剧本，注重冲突、节拍和视觉化叙事。', color: 'bg-indigo-500', icon: 'Pen' },
+    { id: 'script_doctor', name: '剧本医生 (Script Doctor)', role: 'Script Doctor', systemPrompt: '你是一位资深剧本医生。你的任务是诊断剧本中的结构性问题，如人物动机不清、节奏拖沓或高潮无力，并提供具体的修改方案。', color: 'bg-red-500', icon: 'Activity' },
+    { id: 'producer', name: '制片人 (Producer)', role: 'Producer', systemPrompt: '你是一位商业眼光敏锐的制片人。你关注故事的市场潜力、受众定位和高概念（High Concept）。你会确保故事在商业上是可行的。', color: 'bg-amber-500', icon: 'Briefcase' },
+    { id: 'director', name: '导演 (Director)', role: 'Director', systemPrompt: '你是一位注重视听语言的导演。你关注场景的氛围、镜头感和演员的潜台词。你会将文字转化为画面指令。', color: 'bg-purple-500', icon: 'Video' },
+    { id: 'character_psych', name: '角色心理专家', role: 'Psychologist', systemPrompt: '你专注于人物弧光和内在动机。你确保每个人物的行为都符合其心理侧写，并随故事发展而成长。', color: 'bg-pink-500', icon: 'Heart' },
+    { id: 'dialogue_specialist', name: '对白专家', role: 'Dialogue Coach', systemPrompt: '你专注于打磨人物对白，去除废话，增加潜台词，并确保每个角色都有独特的说话风格（Voice）。', color: 'bg-teal-500', icon: 'MessageSquare' }
 ];
 
 const StoryAgentView: React.FC<StoryAgentViewProps> = ({
@@ -52,16 +54,17 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 }) => {
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'run' | 'workflow' | 'agents'>('run');
+    const [activeTab, setActiveTab] = useState<'workflow' | 'agents'>('workflow');
 
     // Workflow State
-    const [storyGuidance, setStoryGuidance] = useState(""); // User's one-sentence prompt
-    const [isRunning, setIsRunning] = useState(false);
+    const [storyGuidance, setStoryGuidance] = useState("");
+    const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
     const [currentStepIndex, setCurrentStepIndex] = useState(-1);
     const [executionLogs, setExecutionLogs] = useState<Record<string, StepExecutionLog>>({});
-    const [generatedDraft, setGeneratedDraft] = useState("");
 
-    const logContainerRef = useRef<HTMLDivElement>(null);
+    // We track the *editable* output for each step here.
+    const [stepOutputs, setStepOutputs] = useState<Record<string, string>>({});
+
     const [editingAgent, setEditingAgent] = useState<StoryAgent | null>(null);
     const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
 
@@ -69,19 +72,26 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
         if (agents.length === 0) onUpdateAgents(DEFAULT_AGENTS);
         if (workflow.length === 0) {
             onUpdateWorkflow([
-                { id: 'step1', name: '生成大纲', agentId: 'architect', instruction: '根据用户提供的剧情指引，以及前情提要，构思本章节的详细大纲。' },
+                { id: 'step_concept', name: '概念开发 (Concept)', agentId: 'producer', instruction: '根据用户指引，开发一个高概念（High Concept）故事梗概，明确钩子（Hook）、核心冲突和目标受众。' },
+                { id: 'step_outline', name: '大纲构建 (Outlining)', agentId: 'screenwriter', instruction: '基于概念，构建标准的三幕式大纲。明确激励事件、第一幕高潮、中点、一无所有时刻和第三幕高潮。' },
                 {
-                    id: 'step2',
-                    name: '撰写正文',
-                    agentId: 'writer',
-                    instruction: '根据生成的大纲，扩写成一篇完整的章节内容。注意环境描写和人物心理。',
+                    id: 'step_writing',
+                    name: '初稿撰写 (Drafting)',
+                    agentId: 'screenwriter',
+                    instruction: '撰写完整的场景内容。注重“展示而非讲述”（Show, Don\'t Tell）。'
+                },
+                {
+                    id: 'step_review',
+                    name: '剧本诊断 (Doctoring)',
+                    agentId: 'script_doctor',
+                    instruction: '审查初稿，寻找结构弱点和节奏问题。',
                     validation: {
-                        reviewerId: 'editor',
-                        criteria: '内容必须超过500字，且必须包含至少两句人物对话，以及一段环境描写。',
+                        reviewerId: 'script_doctor',
+                        criteria: '检查冲突是否强烈，人物动机是否合理，节奏是否紧凑。',
                         maxRetries: 2
                     }
                 },
-                { id: 'step3', name: '社会学润色', agentId: 'sociologist', instruction: '检查正文，增强其中关于社会结构影响的描写，使其更具深度。' }
+                { id: 'step_dialogue', name: '对白润色 (Polishing)', agentId: 'dialogue_specialist', instruction: '优化对白，增强潜台词，使其更自然且符合人物性格。' }
             ]);
         }
     }, []);
@@ -89,269 +99,330 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     const getAgentById = (id: string) => agents.find(a => a.id === id) || agents[0];
     const selectedSegment = storySegments.find(s => s.id === selectedSegmentId);
 
-    const handleRunWorkflow = async () => {
-        if (!settings.apiKey) return alert("请先配置 API Key");
-        if (!storyGuidance.trim()) return alert("请输入本章的剧情指引或一句话描述。");
+    // --- Execution Logic ---
 
-        setIsRunning(true);
-        setExecutionLogs({});
-        setCurrentStepIndex(0);
-        setGeneratedDraft("");
-
-        let contextSegments = storySegments;
-        // Use segments up to current selected one as context
-        if (selectedSegment) {
-            const idx = storySegments.findIndex(s => s.id === selectedSegmentId);
-            contextSegments = storySegments.slice(0, idx);
+    const executeStep = async (index: number, inputContext: string) => {
+        if (index >= workflow.length) {
+            setWorkflowStatus('completed');
+            return;
         }
 
-        // Construct the context
-        const contextText = contextSegments.length > 0
-            ? `【前情提要】:\n${contextSegments[contextSegments.length - 1].content.slice(-2000)}`
-            : "这是故事的开篇。";
+        const step = workflow[index];
+        const agent = getAgentById(step.agentId);
+        setCurrentStepIndex(index);
+        setWorkflowStatus('running');
 
-        // Inject the user's guidance strongly into the initial input
-        let previousOutput = `
-${contextText}
-
-【本章核心指令 (User Directive)】:
-"${storyGuidance}"
-
-请围绕上述指令开启创作。
-    `;
+        setExecutionLogs(prev => ({
+            ...prev,
+            [step.id]: { status: 'generating', content: '', attempts: [] }
+        }));
 
         try {
-            for (let i = 0; i < workflow.length; i++) {
-                setCurrentStepIndex(i);
-                const step = workflow[i];
-                const agent = getAgentById(step.agentId);
+            let currentRound = 1;
+            let isApproved = false;
+            let content = "";
+            let critique = "";
+            const maxRetries = step.validation ? (step.validation.maxRetries || 1) : 0;
 
-                setExecutionLogs(prev => ({
-                    ...prev,
-                    [step.id]: { status: 'generating', content: '', attempts: [] }
-                }));
+            // Iteration Loop (Internal to the step)
+            while (!isApproved && currentRound <= maxRetries + 1) {
+                const status = currentRound > 1 ? 'revising' : 'generating';
+                setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } }));
 
-                let currentRound = 1;
-                let isApproved = false;
-                let content = "";
-                let critique = "";
-                const maxRetries = step.validation ? (step.validation.maxRetries || 1) : 0;
+                // 1. Generate
+                content = await executeAgentTask(
+                    agent,
+                    step.instruction,
+                    inputContext, // Input is the result of previous step (or guidance)
+                    model,
+                    framework,
+                    worldContext,
+                    currentTimeSetting,
+                    settings,
+                    critique
+                );
 
-                while (!isApproved && currentRound <= maxRetries + 1) {
-                    const status = currentRound > 1 ? 'revising' : 'generating';
-                    setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } }));
+                // Update Log
+                setExecutionLogs(prev => {
+                    const logs = prev[step.id]!;
+                    const newAttempts = [...logs.attempts];
+                    if (newAttempts[currentRound - 1]) newAttempts[currentRound - 1].output = content;
+                    else newAttempts.push({ round: currentRound, output: content });
+                    return { ...prev, [step.id]: { ...logs, content, attempts: newAttempts } };
+                });
 
-                    content = await executeAgentTask(
-                        agent,
-                        step.instruction,
-                        previousOutput,
-                        model,
-                        framework,
-                        worldContext,
-                        currentTimeSetting,
-                        settings,
-                        critique
-                    );
+                // 2. Validate (if needed)
+                if (step.validation) {
+                    setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } }));
+                    const reviewer = getAgentById(step.validation.reviewerId);
+                    const reviewResult = await executeReviewTask(reviewer, content, step.validation.criteria, model, framework, worldContext, settings);
 
                     setExecutionLogs(prev => {
                         const logs = prev[step.id]!;
                         const newAttempts = [...logs.attempts];
-                        if (newAttempts[currentRound - 1]) {
-                            newAttempts[currentRound - 1].output = content;
-                        } else {
-                            newAttempts.push({ round: currentRound, output: content });
-                        }
-                        return { ...prev, [step.id]: { ...logs, content, attempts: newAttempts } };
+                        newAttempts[currentRound - 1].critique = reviewResult.feedback;
+                        newAttempts[currentRound - 1].verdict = reviewResult.verdict;
+                        return { ...prev, [step.id]: { ...logs, attempts: newAttempts } };
                     });
 
-                    if (step.validation) {
-                        setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } }));
-                        const reviewer = getAgentById(step.validation.reviewerId);
-                        const reviewResult = await executeReviewTask(reviewer, content, step.validation.criteria, model, framework, worldContext, settings);
-
-                        setExecutionLogs(prev => {
-                            const logs = prev[step.id]!;
-                            const newAttempts = [...logs.attempts];
-                            newAttempts[currentRound - 1].critique = reviewResult.feedback;
-                            newAttempts[currentRound - 1].verdict = reviewResult.verdict;
-                            return { ...prev, [step.id]: { ...logs, attempts: newAttempts } };
-                        });
-
-                        if (reviewResult.verdict === 'PASS') isApproved = true;
-                        else {
-                            critique = reviewResult.feedback;
-                            currentRound++;
-                        }
-                    } else {
-                        isApproved = true;
+                    if (reviewResult.verdict === 'PASS') isApproved = true;
+                    else {
+                        critique = reviewResult.feedback;
+                        currentRound++;
                     }
+                } else {
+                    isApproved = true;
                 }
-
-                setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } }));
-                // Pass the result of this step as input to the next step
-                previousOutput = content;
             }
 
-            setGeneratedDraft(previousOutput);
-            setCurrentStepIndex(workflow.length);
+            setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } }));
+
+            // Initial save of the output to editable state
+            setStepOutputs(prev => ({ ...prev, [step.id]: content }));
+
+            // PAUSE here for user intervention
+            setWorkflowStatus('paused');
 
         } catch (e: any) {
-            alert(`执行出错: ${e.message}`);
-            if (workflow[currentStepIndex]) {
-                setExecutionLogs(prev => ({
-                    ...prev,
-                    [workflow[currentStepIndex].id]: { ...prev[workflow[currentStepIndex].id]!, status: 'failed', error: e.message }
-                }));
-            }
-        } finally {
-            setIsRunning(false);
+            console.error(e);
+            setExecutionLogs(prev => ({
+                ...prev,
+                [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
+            }));
+            setWorkflowStatus('paused'); // Allow retry?
+            alert(`Step Failed: ${e.message}`);
         }
     };
 
-    const handleApplyDraft = (mode: 'append' | 'new') => {
-        if (mode === 'append' && selectedSegment) {
-            onUpdateStorySegment(selectedSegment.id, selectedSegment.content + "\n\n" + generatedDraft);
-        } else {
-            onAddStorySegment(generatedDraft);
+    const handleStartWorkflow = () => {
+        if (!settings.apiKey) return alert("请先配置 API Key");
+        if (!storyGuidance.trim()) return alert("请输入剧情指引");
+
+        // Reset
+        setExecutionLogs({});
+        setStepOutputs({});
+        setCurrentStepIndex(-1);
+
+        // Prepare initial context
+        let contextSegments = storySegments;
+        if (selectedSegment) {
+            const idx = storySegments.findIndex(s => s.id === selectedSegmentId);
+            contextSegments = storySegments.slice(0, idx);
         }
-        setGeneratedDraft("");
+        const contextText = contextSegments.length > 0
+            ? `【前情提要】:\n${contextSegments[contextSegments.length - 1].content.slice(-2000)}`
+            : "这是故事的开篇。";
+
+        const initialInput = `
+${contextText}
+
+【本章核心指令 (User Directive)】:
+"${storyGuidance}"
+`;
+        // Start Step 0
+        executeStep(0, initialInput);
     };
+
+    const handleContinue = (fromIndex: number) => {
+        const currentStep = workflow[fromIndex];
+        // The input for the next step is the (potentially edited) output of the current step
+        const outputOfCurrentStep = stepOutputs[currentStep.id] || "";
+
+        executeStep(fromIndex + 1, outputOfCurrentStep);
+    };
+
+    const handleApplyResult = (content: string) => {
+        if (selectedSegment) {
+            onUpdateStorySegment(selectedSegment.id, selectedSegment.content + "\n\n" + content);
+        } else {
+            onAddStorySegment(content);
+        }
+        setGeneratedDraft(""); // Clear
+        setWorkflowStatus('idle');
+    };
+
+    // --- Render Helpers ---
 
     const renderCopilot = () => (
-        <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200 w-80 shrink-0">
+        <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200 w-[500px] shrink-0 transition-all">
             <div className="p-3 border-b border-slate-200 bg-white flex items-center justify-between">
                 <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('run')} className={`p-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'run' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`} title="运行"><Play className="w-4 h-4" /></button>
-                    <button onClick={() => setActiveTab('workflow')} className={`p-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'workflow' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`} title="工作流"><GitMerge className="w-4 h-4" /></button>
-                    <button onClick={() => setActiveTab('agents')} className={`p-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'agents' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`} title="Agents"><Bot className="w-4 h-4" /></button>
+                    <button onClick={() => setActiveTab('workflow')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'workflow' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>工作流 (Workflow)</button>
+                    <button onClick={() => setActiveTab('agents')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'agents' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Agents</button>
                 </div>
                 <button onClick={() => setIsCopilotOpen(false)} className="text-slate-400 hover:text-slate-600"><Sidebar className="w-4 h-4" /></button>
             </div>
 
-            <div className="flex-1 overflow-hidden relative">
-                {activeTab === 'run' && (
-                    <div className="flex flex-col h-full">
-                        {generatedDraft && !isRunning ? (
-                            <div className="p-4 overflow-y-auto flex-1 bg-emerald-50/50">
-                                <div className="bg-white rounded-xl shadow-sm border border-emerald-100 p-4 animate-fadeIn">
-                                    <h3 className="text-sm font-bold text-emerald-700 mb-2 flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4" /> 生成结果
-                                    </h3>
-                                    <div className="text-xs text-slate-600 max-h-60 overflow-y-auto bg-slate-50 p-2 rounded mb-4 border border-slate-100 whitespace-pre-wrap">
-                                        {generatedDraft}
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        {selectedSegment && (
-                                            <button
-                                                onClick={() => handleApplyDraft('append')}
-                                                className="w-full py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
-                                            >
-                                                插入到当前章节
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => handleApplyDraft('new')}
-                                            className="w-full py-2 bg-white border border-emerald-200 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-50"
-                                        >
-                                            作为新章节保存
-                                        </button>
-                                        <button
-                                            onClick={() => setGeneratedDraft("")}
-                                            className="w-full py-2 text-slate-400 text-xs hover:text-slate-600"
-                                        >
-                                            丢弃
-                                        </button>
-                                    </div>
-                                </div>
+            <div className="flex-1 overflow-hidden relative flex flex-col">
+                {activeTab === 'workflow' && (
+                    <>
+                        {/* Header Prompt Area */}
+                        <div className="p-4 bg-white border-b border-slate-100 shrink-0 space-y-3">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
+                                    <Lightbulb className="w-3 h-3 text-amber-500" /> 剧情指引
+                                </label>
+                                <textarea
+                                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none resize-none h-16"
+                                    placeholder="输入本章的核心冲突..."
+                                    value={storyGuidance}
+                                    onChange={(e) => setStoryGuidance(e.target.value)}
+                                    disabled={workflowStatus === 'running'}
+                                />
                             </div>
-                        ) : (
-                            <>
-                                <div className="p-4 border-b border-slate-100 bg-white space-y-3">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1">
-                                            <Lightbulb className="w-3 h-3 text-amber-500" /> 剧情指引 (Story Prompt)
-                                        </label>
-                                        <textarea
-                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none resize-none h-24"
-                                            placeholder="例如：主角在雨夜潜入荒坂塔，却发现最好的朋友背叛了他..."
-                                            value={storyGuidance}
-                                            onChange={(e) => setStoryGuidance(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <button
-                                        onClick={handleRunWorkflow}
-                                        disabled={isRunning || !storyGuidance.trim()}
-                                        className={`w-full py-3 rounded-xl font-bold text-white shadow-sm flex items-center justify-center gap-2 transition-all ${isRunning || !storyGuidance.trim() ? 'bg-slate-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-                                    >
-                                        {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                        {isRunning ? 'Agents 协作中...' : '开始创作'}
-                                    </button>
+                            {workflowStatus === 'idle' || workflowStatus === 'completed' ? (
+                                <button
+                                    onClick={handleStartWorkflow}
+                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+                                >
+                                    <Play className="w-4 h-4" /> 开始工作流
+                                </button>
+                            ) : (
+                                <div className="w-full py-2 bg-slate-100 text-slate-500 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
+                                    {workflowStatus === 'running' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+                                    {workflowStatus === 'running' ? '正在执行...' : '等待操作...'}
                                 </div>
+                            )}
+                        </div>
 
-                                <div className="flex-1 overflow-y-auto p-3 space-y-3" ref={logContainerRef}>
-                                    {workflow.map((step, index) => {
-                                        const log = executionLogs[step.id];
-                                        const status = log?.status || (index < currentStepIndex ? 'completed' : 'pending');
-                                        const agent = getAgentById(step.agentId);
+                        {/* Workflow Steps List */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                            {workflow.map((step, idx) => {
+                                const isCurrent = idx === currentStepIndex;
+                                const isPast = idx < currentStepIndex;
+                                const isPending = idx > currentStepIndex;
+                                const log = executionLogs[step.id];
+                                const output = stepOutputs[step.id];
 
-                                        return (
-                                            <div key={step.id} className={`p-3 rounded-lg border text-xs ${status === 'pending' ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-white border-indigo-100 shadow-sm'}`}>
-                                                <div className="flex justify-between items-center mb-1">
-                                                    <span className="font-bold text-slate-700">{step.name}</span>
-                                                    {status === 'generating' && <Loader2 className="w-3 h-3 text-indigo-500 animate-spin" />}
-                                                    {status === 'completed' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
-                                                    {status === 'failed' && <X className="w-3 h-3 text-red-500" />}
+                                return (
+                                    <div key={step.id} className={`
+                                        rounded-xl border transition-all duration-300
+                                        ${isCurrent ? 'bg-white border-indigo-400 shadow-md ring-1 ring-indigo-400' : ''}
+                                        ${isPast ? 'bg-white border-slate-200 opacity-80' : ''}
+                                        ${isPending ? 'bg-slate-100 border-slate-200 opacity-50' : ''}
+                                    `}>
+                                        {/* Step Header */}
+                                        <div className="p-3 flex items-start justify-between border-b border-slate-50">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                                    {idx + 1}
                                                 </div>
-                                                <div className="flex items-center gap-1 text-slate-500 mb-2">
-                                                    <Bot className="w-3 h-3" /> {agent.name}
-                                                </div>
-                                                {log?.content && (
-                                                    <div className="p-2 bg-slate-50 rounded border border-slate-100 text-slate-600 line-clamp-3 italic">
-                                                        {log.content}
+                                                <div>
+                                                    <div className="text-sm font-bold text-slate-700">{step.name}</div>
+                                                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                        <Bot className="w-3 h-3" /> {getAgentById(step.agentId)?.name}
                                                     </div>
-                                                )}
-                                                {log?.attempts?.length > 1 && (
-                                                    <div className="mt-2 text-orange-600 bg-orange-50 px-2 py-1 rounded inline-block">
-                                                        已重试 {log.attempts.length - 1} 次
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {/* Step Status Badges */}
+                                                {log?.status === 'generating' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
+                                                {log?.status === 'reviewing' && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-bold">审查中</span>}
+                                                {log?.status === 'revising' && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">修改中 ({log.attempts.length})</span>}
+                                                {log?.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+
+                                                {/* Edit Controls (Only if idle and not running) */}
+                                                {(workflowStatus === 'idle' || workflowStatus === 'paused') && (
+                                                    <div className="flex gap-1 ml-2">
+                                                        <button disabled={idx === 0} onClick={() => { const n = [...workflow];[n[idx - 1], n[idx]] = [n[idx], n[idx - 1]]; onUpdateWorkflow(n); }} className="text-slate-400 hover:text-indigo-600 p-1"><ChevronUp className="w-3 h-3" /></button>
+                                                        <button disabled={idx === workflow.length - 1} onClick={() => { const n = [...workflow];[n[idx + 1], n[idx]] = [n[idx], n[idx + 1]]; onUpdateWorkflow(n); }} className="text-slate-400 hover:text-indigo-600 p-1"><ChevronDown className="w-3 h-3" /></button>
+                                                        <button onClick={() => setEditingStep(step)} className="text-slate-400 hover:text-indigo-600 p-1"><Edit className="w-3 h-3" /></button>
+                                                        <button onClick={() => onUpdateWorkflow(workflow.filter(s => s.id !== step.id))} className="text-slate-400 hover:text-red-600 p-1"><Trash2 className="w-3 h-3" /></button>
                                                     </div>
                                                 )}
                                             </div>
-                                        )
-                                    })}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
-                {activeTab === 'workflow' && (
-                    <div className="flex flex-col h-full p-3 overflow-y-auto">
-                        <button
-                            onClick={() => {
-                                const newStep: WorkflowStep = { id: crypto.randomUUID(), name: '新步骤', agentId: agents[0].id, instruction: '' };
-                                onUpdateWorkflow([...workflow, newStep]);
-                                setEditingStep(newStep);
-                            }}
-                            className="w-full py-2 mb-3 border border-dashed border-indigo-300 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50"
-                        >
-                            + 添加步骤
-                        </button>
-                        <div className="space-y-2">
-                            {workflow.map((step, idx) => (
-                                <div key={step.id} className="bg-white border border-slate-200 rounded-lg p-3 group relative hover:border-indigo-300">
-                                    <div className="font-bold text-xs text-slate-700 mb-1">{idx + 1}. {step.name}</div>
-                                    <div className="text-[10px] text-slate-500 line-clamp-2">{step.instruction}</div>
-                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1">
-                                        <button onClick={() => setEditingStep(step)} className="p-1 hover:text-indigo-600"><Edit className="w-3 h-3" /></button>
-                                        <button onClick={() => onUpdateWorkflow(workflow.filter(s => s.id !== step.id))} className="p-1 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
+                                        </div>
+
+                                        {/* Step Content / Editor */}
+                                        <div className="p-3 pt-0">
+                                            {/* Logic: 
+                                                If running -> show live logs
+                                                If completed -> show Editor with "output"
+                                                If pending -> show instruction preview
+                                            */}
+
+                                            {/* Preview Instruction */}
+                                            {(!log && isPending) && (
+                                                <div className="text-xs text-slate-500 italic mt-1">{step.instruction}</div>
+                                            )}
+
+                                            {/* Reviewer Badge */}
+                                            {step.validation && (
+                                                <div className="mt-2 flex items-center gap-1.5 text-[9px] font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded-md border border-orange-100 max-w-fit">
+                                                    <CheckCircle2 className="w-2.5 h-2.5" />
+                                                    <span>审查: {getAgentById(step.validation.reviewerId).name}</span>
+                                                </div>
+                                            )}
+
+                                            {/* Live Logs */}
+                                            {log?.status !== 'completed' && log?.attempts && log.attempts.length > 0 && (
+                                                <div className="mt-2 space-y-2">
+                                                    {log.attempts.map((att, i) => (
+                                                        <div key={i} className="text-[10px] bg-slate-50 p-2 rounded border border-slate-100">
+                                                            <div className="font-bold text-slate-500 mb-1">Round {att.round}</div>
+                                                            {att.critique && <div className="text-orange-600 mb-1 bg-orange-50 p-1 rounded">Critique: {att.critique}</div>}
+                                                            {i === log.attempts.length - 1 && log.status !== 'generating' && <div className="line-clamp-3 text-slate-600">{att.output}</div>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Result Editor */}
+                                            {log?.status === 'completed' && (
+                                                <div className="mt-2 animate-fadeIn">
+                                                    <textarea
+                                                        className={`w-full text-xs p-2 border rounded-md focus:ring-2 focus:ring-indigo-300 resize-y min-h-[120px] 
+                                                            ${isCurrent ? 'bg-white border-indigo-200 text-slate-800' : 'bg-slate-50 border-slate-200 text-slate-500'}
+                                                        `}
+                                                        value={output || ""}
+                                                        onChange={(e) => setStepOutputs(prev => ({ ...prev, [step.id]: e.target.value }))}
+                                                    />
+
+                                                    {/* Actions (Only show for current step when paused) */}
+                                                    {isCurrent && workflowStatus === 'paused' && (
+                                                        <div className="mt-2 flex gap-2">
+                                                            <button
+                                                                onClick={() => handleContinue(idx)}
+                                                                className="flex-1 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 flex items-center justify-center gap-1"
+                                                            >
+                                                                <ArrowRight className="w-3 h-3" />
+                                                                {idx === workflow.length - 1 ? '完成所有步骤' : '下一步 (Next Step)'}
+                                                            </button>
+                                                            {idx === workflow.length - 1 && (
+                                                                <button
+                                                                    onClick={() => handleApplyResult(output || "")}
+                                                                    className="px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded text-xs font-bold hover:bg-emerald-100"
+                                                                >
+                                                                    应用到正文
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
+
+                            {workflowStatus === 'idle' && (
+                                <button
+                                    onClick={() => {
+                                        const newStep: WorkflowStep = { id: crypto.randomUUID(), name: '新步骤', agentId: agents[0].id, instruction: '' };
+                                        onUpdateWorkflow([...workflow, newStep]);
+                                        setEditingStep(newStep);
+                                    }}
+                                    className="w-full py-3 border border-dashed border-slate-300 rounded-xl text-slate-400 hover:border-indigo-400 hover:text-indigo-500 transition-all font-bold text-xs"
+                                >
+                                    + 添加步骤
+                                </button>
+                            )}
                         </div>
-                    </div>
+                    </>
                 )}
+
                 {activeTab === 'agents' && (
-                    <div className="flex flex-col h-full p-3 overflow-y-auto">
+                    <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50">
                         <button
                             onClick={() => {
                                 const newAgent: StoryAgent = { id: crypto.randomUUID(), name: '新 Agent', role: 'Role', systemPrompt: '', color: 'bg-slate-500', icon: 'Bot' };
@@ -364,7 +435,7 @@ ${contextText}
                         </button>
                         <div className="space-y-2">
                             {agents.map(agent => (
-                                <div key={agent.id} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2 group">
+                                <div key={agent.id} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2 group hover:border-indigo-300 hover:shadow-sm transition-all">
                                     <div className={`w-8 h-8 rounded flex items-center justify-center text-white ${agent.color}`}>
                                         <Bot className="w-4 h-4" />
                                     </div>
@@ -382,159 +453,127 @@ ${contextText}
 
             {/* Editor Modals for Steps/Agents */}
             {(editingStep || editingAgent) && (
-                <div className="absolute inset-0 bg-white z-20 p-4 flex flex-col animate-fadeIn">
-                    <div className="flex justify-between mb-4 border-b pb-2">
-                        <h3 className="font-bold text-sm">{editingStep ? '编辑步骤' : '编辑 Agent'}</h3>
-                        <button onClick={() => { setEditingStep(null); setEditingAgent(null); }}><X className="w-4 h-4" /></button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto space-y-3">
-                        {editingStep && (
-                            <>
-                                <input className="w-full border p-2 text-xs rounded" value={editingStep.name} onChange={e => setEditingStep({ ...editingStep, name: e.target.value })} placeholder="步骤名称" />
-                                <select className="w-full border p-2 text-xs rounded bg-white" value={editingStep.agentId} onChange={e => setEditingStep({ ...editingStep, agentId: e.target.value })}>
-                                    {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                </select>
-                                <textarea className="w-full border p-2 text-xs rounded h-32" value={editingStep.instruction} onChange={e => setEditingStep({ ...editingStep, instruction: e.target.value })} placeholder="指令..." />
-                                <button
-                                    onClick={() => { onUpdateWorkflow(workflow.map(s => s.id === editingStep.id ? editingStep : s)); setEditingStep(null); }}
-                                    className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold"
-                                >保存</button>
-                            </>
-                        )}
-                        {editingAgent && (
-                            <>
-                                <input className="w-full border p-2 text-xs rounded" value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} placeholder="名称" />
-                                <input className="w-full border p-2 text-xs rounded" value={editingAgent.role} onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })} placeholder="角色" />
-                                <textarea className="w-full border p-2 text-xs rounded h-32" value={editingAgent.systemPrompt} onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })} placeholder="System Prompt..." />
-                                <div className="flex gap-2 flex-wrap">
-                                    {['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500'].map(c => (
-                                        <button key={c} onClick={() => setEditingAgent({ ...editingAgent, color: c })} className={`w-5 h-5 rounded-full ${c} ${editingAgent.color === c ? 'ring-2 ring-offset-1' : ''}`} />
-                                    ))}
-                                </div>
-                                <button
-                                    onClick={() => { onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a)); setEditingAgent(null); }}
-                                    className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold mt-4"
-                                >保存</button>
-                            </>
-                        )}
+                <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 p-6 flex flex-col animate-fadeIn">
+                    <div className="bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col max-h-full overflow-hidden w-full max-w-lg mx-auto">
+                        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+                            <h3 className="font-bold text-sm text-slate-700">{editingStep ? '编辑步骤' : '编辑 Agent'}</h3>
+                            <button onClick={() => { setEditingStep(null); setEditingAgent(null); }} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {editingStep && (
+                                <>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">步骤名称</label>
+                                        <input className="w-full border p-2 text-xs rounded" value={editingStep.name} onChange={e => setEditingStep({ ...editingStep, name: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">执行 Agent</label>
+                                        <select className="w-full border p-2 text-xs rounded bg-white" value={editingStep.agentId} onChange={e => setEditingStep({ ...editingStep, agentId: e.target.value })}>
+                                            {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">执行指令</label>
+                                        <textarea className="w-full border p-2 text-xs rounded h-32" value={editingStep.instruction} onChange={e => setEditingStep({ ...editingStep, instruction: e.target.value })} />
+                                    </div>
+
+                                    <div className="border border-slate-200 rounded p-3 bg-slate-50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <input
+                                                type="checkbox"
+                                                id="enableValidation"
+                                                checked={!!editingStep.validation}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setEditingStep({
+                                                            ...editingStep,
+                                                            validation: {
+                                                                reviewerId: agents[0]?.id || 'architect',
+                                                                criteria: '请检查内容的逻辑性和一致性。',
+                                                                maxRetries: 3
+                                                            }
+                                                        });
+                                                    } else {
+                                                        setEditingStep({ ...editingStep, validation: undefined });
+                                                    }
+                                                }}
+                                                className="rounded text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            <label htmlFor="enableValidation" className="text-xs font-bold text-slate-700 select-none cursor-pointer flex items-center gap-1">
+                                                <CheckCircle2 className="w-3 h-3" /> 启用审查迭代 (Reviewer Loop)
+                                            </label>
+                                        </div>
+
+                                        {editingStep.validation && (
+                                            <div className="space-y-3 pl-1 mt-3 pt-3 border-t border-slate-200 animate-fadeIn">
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Reviewer Agent</label>
+                                                    <select
+                                                        className="w-full border border-slate-300 p-2 text-xs rounded bg-white"
+                                                        value={editingStep.validation.reviewerId}
+                                                        onChange={e => setEditingStep({
+                                                            ...editingStep,
+                                                            validation: { ...editingStep.validation!, reviewerId: e.target.value }
+                                                        })}
+                                                    >
+                                                        {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">审查标准 (Criteria)</label>
+                                                    <textarea
+                                                        className="w-full border border-slate-300 p-2 text-xs rounded h-20 resize-none"
+                                                        value={editingStep.validation.criteria}
+                                                        onChange={e => setEditingStep({
+                                                            ...editingStep,
+                                                            validation: { ...editingStep.validation!, criteria: e.target.value }
+                                                        })}
+                                                        placeholder="例如：检查是否有逻辑漏洞..."
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">最大重试次数 (Max Retries)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="10"
+                                                        className="w-full border border-slate-300 p-2 text-xs rounded"
+                                                        value={editingStep.validation.maxRetries}
+                                                        onChange={e => setEditingStep({
+                                                            ...editingStep,
+                                                            validation: { ...editingStep.validation!, maxRetries: parseInt(e.target.value) || 1 }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => { onUpdateWorkflow(workflow.map(s => s.id === editingStep.id ? editingStep : s)); setEditingStep(null); }}
+                                        className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold"
+                                    >保存更改</button>
+                                </>
+                            )}
+                            {editingAgent && (
+                                <>
+                                    <input className="w-full border p-2 text-xs rounded" value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} placeholder="名称" />
+                                    <input className="w-full border p-2 text-xs rounded" value={editingAgent.role} onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })} placeholder="角色" />
+                                    <textarea className="w-full border p-2 text-xs rounded h-32" value={editingAgent.systemPrompt} onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })} placeholder="System Prompt..." />
+                                    <div className="flex gap-2 flex-wrap">
+                                        {['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500'].map(c => (
+                                            <button key={c} onClick={() => setEditingAgent({ ...editingAgent, color: c })} className={`w-5 h-5 rounded-full ${c} ${editingAgent.color === c ? 'ring-2 ring-offset-1' : ''}`} />
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={() => { onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a)); setEditingAgent(null); }}
+                                        className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold mt-4"
+                                    >保存 Agent</button>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
-        </div>
-    );
-
-    return (
-        <div className="flex h-full w-full bg-slate-100 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
-            {/* LEFT: Chapter List (Enhanced) */}
-            <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
-                <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
-                    <h2 className="font-serif font-bold text-slate-800 flex items-center gap-2">
-                        <BookOpen className="w-5 h-5 text-indigo-700" /> 章节管理
-                    </h2>
-                    <button
-                        onClick={() => onAddStorySegment("新章节...")}
-                        className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded transition-colors flex items-center gap-1 text-xs font-bold"
-                        title="新建章节"
-                    >
-                        <PlusCircle className="w-4 h-4" /> 新建
-                    </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {storySegments.length === 0 && (
-                        <div className="text-center py-8 text-slate-400 text-xs italic">
-                            暂无章节，请新建
-                        </div>
-                    )}
-                    {storySegments.map((segment, index) => (
-                        <div
-                            key={segment.id}
-                            onClick={() => setSelectedSegmentId(segment.id)}
-                            className={`
-                        p-3 rounded-lg cursor-pointer transition-all border group relative select-none
-                        ${selectedSegmentId === segment.id
-                                    ? 'bg-white border-indigo-500 shadow-md ring-1 ring-indigo-500 z-10'
-                                    : 'bg-transparent border-transparent hover:bg-white hover:border-slate-200'
-                                }
-                    `}
-                        >
-                            <div className="flex justify-between items-start mb-1">
-                                <span className={`text-xs font-bold ${selectedSegmentId === segment.id ? 'text-indigo-700' : 'text-slate-500'}`}>Chapter {index + 1}</span>
-                                <span className="text-[10px] text-slate-400">{segment.timestamp}</span>
-                            </div>
-                            <div className={`text-sm font-medium line-clamp-1 ${selectedSegmentId === segment.id ? 'text-slate-800' : 'text-slate-600'}`}>
-                                {segment.content.split('\n')[0] || "无标题章节"}
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-1 truncate">
-                                {segment.content.length} 字
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (window.confirm("确定要删除这一章吗？")) {
-                                        onRemoveStorySegment(segment.id);
-                                        if (selectedSegmentId === segment.id) setSelectedSegmentId(null);
-                                    }
-                                }}
-                                className="absolute right-2 bottom-2 p-1.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all z-20"
-                                title="删除章节"
-                            >
-                                <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* CENTER: Editor */}
-            <div className="flex-1 flex flex-col bg-white min-w-0 relative">
-                {selectedSegment ? (
-                    <>
-                        <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 bg-slate-50/30">
-                            <div className="flex items-center gap-2 flex-1">
-                                <Clock className="w-4 h-4 text-slate-400" />
-                                <span className="text-xs font-bold text-slate-400 uppercase mr-2">时间节点:</span>
-                                <input
-                                    className="text-sm font-bold text-slate-700 border border-transparent hover:border-slate-300 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none w-full max-w-xs transition-all bg-transparent"
-                                    value={selectedSegment.timestamp}
-                                    onChange={(e) => onUpdateStorySegment(selectedSegment.id, selectedSegment.content, e.target.value)}
-                                    placeholder="例如：2077年 冬"
-                                />
-                            </div>
-                            {!isCopilotOpen && (
-                                <button onClick={() => setIsCopilotOpen(true)} className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors shadow-sm">
-                                    <Bot className="w-4 h-4" /> 唤起 Copilot
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex-1 overflow-hidden relative">
-                            <MilkdownEditor
-                                key={selectedSegment.id}
-                                content={selectedSegment.content}
-                                onChange={(text) => onUpdateStorySegment(selectedSegment.id, text)}
-                            />
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-300 bg-slate-50/20">
-                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <BookText className="w-10 h-10 text-slate-300" />
-                        </div>
-                        <p className="font-medium text-slate-500">请选择或创建一个章节以开始写作</p>
-                        <p className="text-sm mt-2 max-w-xs text-center text-slate-400">在左侧列表点击“新建”按钮，或选择已有章节。</p>
-                        <button
-                            onClick={() => onAddStorySegment("新章节...")}
-                            className="mt-6 px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all flex items-center gap-2"
-                        >
-                            <PlusCircle className="w-4 h-4" /> 创建第一章
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* RIGHT: Copilot */}
-            {isCopilotOpen && renderCopilot()}
         </div>
     );
 };
