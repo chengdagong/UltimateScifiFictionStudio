@@ -312,9 +312,12 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
 
       {isMinimalUI ? (
         // === MINIMAL MODE: THREE-PANE LAYOUT ===
-        <>
+        <div
+          className="flex h-full flex-none transition-[width] duration-75 border-r border-slate-200 bg-slate-50"
+          style={{ width: isDesktop ? sidebarWidth : '100%' }}
+        >
           {/* PANE 1: RAIL (Navigation) */}
-          <div className="w-16 bg-slate-50 border-r border-slate-200 flex flex-col items-center py-4 gap-4 z-20 shrink-0 overflow-x-hidden h-full">
+          <div className="w-16 border-r border-slate-200 flex flex-col items-center py-4 gap-4 z-20 shrink-0 overflow-x-hidden h-full">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mb-2" title={viewMode === 'list' ? "列表模式" : "图谱模式"}>
               {viewMode === 'list' ? <Network className="w-6 h-6" /> : <GitGraph className="w-6 h-6" />}
             </div>
@@ -352,8 +355,8 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             </button>
           </div>
 
-          {/* PANE 2: LIST PANEL */}
-          <div className="w-72 bg-white border-r border-slate-200 flex flex-col z-10 shrink-0">
+          {/* PANE 2: LIST PANEL (Now Flexible) */}
+          <div className="flex-1 bg-white flex flex-col z-10 min-w-0">
             {/* Header */}
             <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-bold text-slate-700 text-sm truncate">
@@ -381,7 +384,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               <div className="h-12" />
             </div>
           </div>
-        </>
+        </div>
       ) : (
         // === STANDARD MODE: SIDEBAR (Resizable) ===
         <div
