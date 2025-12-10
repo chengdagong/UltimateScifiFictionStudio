@@ -1,5 +1,5 @@
 import { useState, Dispatch, SetStateAction } from 'react';
-import { StoryAgent, WorkflowStep, StepExecutionLog } from '../types';
+import { StoryAgent, WorkflowStep, StepExecutionLog, StoryArtifact } from '../types';
 
 export interface UseStoryEngineReturn {
     agents: StoryAgent[];
@@ -20,6 +20,8 @@ export interface UseStoryEngineReturn {
     setStepOutputs: Dispatch<SetStateAction<Record<string, string>>>;
     generatedDraft: string;
     setGeneratedDraft: Dispatch<SetStateAction<string>>;
+    artifacts: StoryArtifact[];
+    setArtifacts: Dispatch<SetStateAction<StoryArtifact[]>>;
 
     // Helpers
     resetStoryEngine: () => void;
@@ -36,6 +38,7 @@ export const useStoryEngine = (): UseStoryEngineReturn => {
     const [executionLogs, setExecutionLogs] = useState<Record<string, StepExecutionLog>>({});
     const [stepOutputs, setStepOutputs] = useState<Record<string, string>>({});
     const [generatedDraft, setGeneratedDraft] = useState("");
+    const [artifacts, setArtifacts] = useState<StoryArtifact[]>([]);
 
     const resetStoryEngine = () => {
         setAgents([]);
@@ -46,6 +49,7 @@ export const useStoryEngine = (): UseStoryEngineReturn => {
         setExecutionLogs({});
         setStepOutputs({});
         setGeneratedDraft("");
+        setArtifacts([]);
     };
 
     return {
@@ -57,6 +61,7 @@ export const useStoryEngine = (): UseStoryEngineReturn => {
         executionLogs, setExecutionLogs,
         stepOutputs, setStepOutputs,
         generatedDraft, setGeneratedDraft,
+        artifacts, setArtifacts,
         resetStoryEngine
     };
 };

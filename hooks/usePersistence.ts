@@ -67,7 +67,8 @@ export const usePersistence = ({
                 currentTimeSetting: worldModel.currentTimeSetting,
                 chronicleText: worldModel.chronicleText,
                 agents: storyEngine.agents,
-                workflow: storyEngine.workflow
+                workflow: storyEngine.workflow,
+                artifacts: storyEngine.artifacts
             };
             return await saveWorld(worldData);
         },
@@ -104,6 +105,7 @@ export const usePersistence = ({
         onSuccess: () => {
             worldModel.resetModel(INITIAL_CONTEXTS['general']);
             storyEngine.resetStoryEngine();
+            // storyEngine.resetStoryEngine() already clears artifacts
             setCurrentWorldId(undefined);
             setWorldName("未命名世界");
             setActiveTab('participants');
@@ -218,6 +220,7 @@ export const usePersistence = ({
 
         storyEngine.setAgents(world.agents || []);
         storyEngine.setWorkflow(world.workflow || []);
+        storyEngine.setArtifacts(world.artifacts || []);
 
         storyEngine.setStoryGuidance("");
         storyEngine.setWorkflowStatus('idle');
