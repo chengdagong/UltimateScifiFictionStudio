@@ -6,9 +6,9 @@ import { WorldModel, SocialEntity, EntityCategory, LayerDefinition, StorySegment
  */
 const getGoogleClient = (settings: ApiSettings) => {
   if (!settings.apiKey) throw new Error("API Key is missing.");
-  return new GoogleGenAI({ 
-    apiKey: settings.apiKey, 
-    baseUrl: settings.baseUrl || undefined 
+  return new GoogleGenAI({
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl || undefined
   } as any);
 };
 
@@ -19,7 +19,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  */
 const callOpenAI = async (settings: ApiSettings, prompt: string, jsonMode: boolean = false, systemInstruction?: string): Promise<string> => {
   if (!settings.apiKey) throw new Error("API Key missing");
-  
+
   const baseUrl = (settings.baseUrl || "https://openrouter.ai/api/v1").replace(/\/$/, "");
   const url = `${baseUrl}/chat/completions`;
 
@@ -73,12 +73,12 @@ const generateText = async (settings: ApiSettings, prompt: string, jsonMode: boo
       } else {
         // Google GenAI SDK
         const ai = getGoogleClient(settings);
-        const config: any = { 
-            temperature: 0.7,
-            systemInstruction: systemInstruction
+        const config: any = {
+          temperature: 0.7,
+          systemInstruction: systemInstruction
         };
         if (jsonMode) config.responseMimeType = "application/json";
-        
+
         const response = await ai.models.generateContent({
           model: settings.model,
           contents: prompt,
@@ -89,12 +89,12 @@ const generateText = async (settings: ApiSettings, prompt: string, jsonMode: boo
     } catch (error: any) {
       lastError = error;
       const msg = error.message || JSON.stringify(error);
-      
+
       // Check for retryable errors (500, 503, RPC failures, XHR errors)
-      const isRetryable = 
-        msg.includes("500") || 
-        msg.includes("503") || 
-        msg.includes("Rpc failed") || 
+      const isRetryable =
+        msg.includes("500") ||
+        msg.includes("503") ||
+        msg.includes("Rpc failed") ||
         msg.includes("xhr error") ||
         msg.includes("fetch failed");
 
@@ -104,25 +104,25 @@ const generateText = async (settings: ApiSettings, prompt: string, jsonMode: boo
         await delay(waitTime);
         continue;
       }
-      
+
       // If not retryable or max retries reached, throw immediately
       throw error;
     }
   }
-  
+
   throw lastError;
 };
 
 const handleApiError = (error: any) => {
-    console.error("API Error:", error);
-    const msg = error.message || JSON.stringify(error);
-    if (msg.includes("Region not supported") || msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
-       throw new Error("API 错误: Region not supported。请在设置中配置反向代理 (Base URL)。");
-    }
-    if (msg.includes("500") || msg.includes("Rpc failed")) {
-       throw new Error("API 服务暂时不可用 (500 RPC Error)，系统已尝试重试。请稍后再试或检查网络。");
-    }
-    throw new Error(`生成失败: ${msg.slice(0, 100)}...`);
+  console.error("API Error:", error);
+  const msg = error.message || JSON.stringify(error);
+  if (msg.includes("Region not supported") || msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
+    throw new Error("API 错误: Region not supported。请在设置中配置反向代理 (Base URL)。");
+  }
+  if (msg.includes("500") || msg.includes("Rpc failed")) {
+    throw new Error("API 服务暂时不可用 (500 RPC Error)，系统已尝试重试。请稍后再试或检查网络。");
+  }
+  throw new Error(`生成失败: ${msg.slice(0, 100)}...`);
 };
 
 export const generateEntitiesForLayer = async (
@@ -168,7 +168,7 @@ export const generateEntitiesForLayer = async (
 
   try {
     const rawText = await generateText(settings, prompt, false);
-    
+
     let data: any[] = [];
     try {
       data = JSON.parse(rawText);
@@ -176,7 +176,7 @@ export const generateEntitiesForLayer = async (
       const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
       if (jsonMatch) data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
     }
-    
+
     if (!Array.isArray(data)) return [];
 
     return data.map((item) => ({
@@ -218,7 +218,7 @@ export const importWorldFromText = async (
   try {
     const rawText = await generateText(settings, prompt, true);
     const result = JSON.parse(rawText || "{}");
-    
+
     const context = result.context || "导入的世界";
     const rawEntities = Array.isArray(result.entities) ? result.entities : [];
 
@@ -241,16 +241,16 @@ export const generateWorldFromScenario = async (
   scenarioPrompt: string,
   framework: FrameworkDefinition,
   settings: ApiSettings
-): Promise<{ 
-    context: string, 
-    entities: SocialEntity[],
-    relationships: EntityRelationship[],
-    entityStates: EntityState[],
-    storySegments: StorySegment[],
-    technologies: TechNode[],
-    techDependencies: TechDependency[]
+): Promise<{
+  context: string,
+  entities: SocialEntity[],
+  relationships: EntityRelationship[],
+  entityStates: EntityState[],
+  storySegments: StorySegment[],
+  technologies: TechNode[],
+  techDependencies: TechDependency[]
 }> => {
-  
+
   const layerInstructions = framework.layers.map(layer => {
     return `- 层级: ${layer.title} (${layer.description})\n  允许的类别: ${layer.allowedCategories.join(', ')}`;
   }).join('\n');
@@ -315,15 +315,15 @@ export const generateWorldFromScenario = async (
     try {
       result = JSON.parse(rawText);
     } catch (e) {
-       const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
-       if (jsonMatch) result = JSON.parse(jsonMatch[0]);
+      const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) result = JSON.parse(jsonMatch[0]);
     }
-    
+
     const context = result.context || "生成的剧本世界";
-    
+
     // Helper to extract arrays safely
     const getArray = (arr: any) => Array.isArray(arr) ? arr : [];
-    
+
     const rawEntities = getArray(result.entities);
     const rawRelationships = getArray(result.relationships);
     const rawStates = getArray(result.entityStates);
@@ -334,7 +334,7 @@ export const generateWorldFromScenario = async (
     // ID Mapping: Temp ID -> UUID
     const idMap: Record<string, string> = {};
     const techIdMap: Record<string, string> = {};
-    
+
     const entities: SocialEntity[] = rawEntities.map((e: any) => {
       const realId = crypto.randomUUID();
       if (e.id) idMap[e.id] = realId;
@@ -374,7 +374,7 @@ export const generateWorldFromScenario = async (
       id: crypto.randomUUID(),
       timestamp: t.timestamp || "未知时间",
       content: t.content || "",
-      influencedBy: Array.isArray(t.participantIds) 
+      influencedBy: Array.isArray(t.participantIds)
         ? t.participantIds.map((pid: string) => idMap[pid]).filter((id: string) => !!id)
         : []
     }));
@@ -410,27 +410,27 @@ export const generateWorldFromScenario = async (
 };
 
 export const executeAgentTask = async (
-    agent: StoryAgent,
-    taskInstruction: string,
-    previousOutput: string,
-    model: WorldModel,
-    framework: FrameworkDefinition,
-    worldContext: string,
-    currentTime: string,
-    settings: ApiSettings,
-    critiqueFeedback?: string
+  agent: StoryAgent,
+  taskInstruction: string,
+  previousOutput: string,
+  model: WorldModel,
+  framework: FrameworkDefinition,
+  worldContext: string,
+  currentTime: string,
+  settings: ApiSettings,
+  critiqueFeedback?: string
 ): Promise<string> => {
-    
-    // Prepare System Snapshot string
-    const systemState = framework.layers.map(layer => {
-        const layerEntities = model.entities.filter(e => layer.allowedCategories.includes(e.category));
-        const items = layerEntities.map(e => {
-            return `- ${e.name} (${e.category}): ${e.description}`;
-        }).join("\n");
-        return `### ${layer.title}\n${items || "(空)"}`;
-    }).join("\n\n");
 
-    let prompt = `
+  // Prepare System Snapshot string
+  const systemState = framework.layers.map(layer => {
+    const layerEntities = model.entities.filter(e => layer.allowedCategories.includes(e.category));
+    const items = layerEntities.map(e => {
+      return `- ${e.name} (${e.category}): ${e.description}`;
+    }).join("\n");
+    return `### ${layer.title}\n${items || "(空)"}`;
+  }).join("\n\n");
+
+  let prompt = `
     【当前任务】: ${taskInstruction}
     【当前时间节点】: ${currentTime}
     
@@ -445,8 +445,8 @@ export const executeAgentTask = async (
     请根据你的身份设定 (${agent.role}) 和上述信息执行任务。
     `;
 
-    if (critiqueFeedback) {
-        prompt += `
+  if (critiqueFeedback) {
+    prompt += `
         
         !!! 这是一个重写任务 !!!
         上一轮生成的内容被审查 Agent 拒绝了。
@@ -454,27 +454,27 @@ export const executeAgentTask = async (
         
         请根据审查意见，重新修改或重写内容，务必解决上述指出的问题。
         `;
-    }
+  }
 
-    try {
-        return await generateText(settings, prompt, false, agent.systemPrompt);
-    } catch (error: any) {
-        handleApiError(error);
-        return "";
-    }
+  try {
+    return await generateText(settings, prompt, false, agent.systemPrompt);
+  } catch (error: any) {
+    handleApiError(error);
+    return "";
+  }
 };
 
 export const executeReviewTask = async (
-    agent: StoryAgent,
-    contentToReview: string,
-    criteria: string,
-    model: WorldModel,
-    framework: FrameworkDefinition,
-    worldContext: string,
-    settings: ApiSettings
+  agent: StoryAgent,
+  contentToReview: string,
+  criteria: string,
+  model: WorldModel,
+  framework: FrameworkDefinition,
+  worldContext: string,
+  settings: ApiSettings
 ): Promise<{ verdict: 'PASS' | 'FAIL', feedback: string }> => {
-    
-    const prompt = `
+
+  const prompt = `
     【任务目标】: 你是审查员。请审查以下生成的文本内容。
     【审查标准 (Criteria)】: ${criteria}
     
@@ -490,24 +490,24 @@ export const executeReviewTask = async (
     }
     `;
 
+  try {
+    const rawText = await generateText(settings, prompt, true, agent.systemPrompt);
+    let result: any = {};
     try {
-        const rawText = await generateText(settings, prompt, true, agent.systemPrompt);
-        let result: any = {};
-        try {
-           result = JSON.parse(rawText);
-        } catch (e) {
-           const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
-           if (jsonMatch) result = JSON.parse(jsonMatch[0]);
-        }
-        
-        return {
-            verdict: result.verdict === 'PASS' ? 'PASS' : 'FAIL',
-            feedback: result.feedback || "无反馈"
-        };
-    } catch (error: any) {
-        handleApiError(error);
-        return { verdict: 'FAIL', feedback: "审查过程发生错误" };
+      result = JSON.parse(rawText);
+    } catch (e) {
+      const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) result = JSON.parse(jsonMatch[0]);
     }
+
+    return {
+      verdict: result.verdict === 'PASS' ? 'PASS' : 'FAIL',
+      feedback: result.feedback || "无反馈"
+    };
+  } catch (error: any) {
+    handleApiError(error);
+    return { verdict: 'FAIL', feedback: "审查过程发生错误" };
+  }
 };
 
 export const generateStorySegment = async (
@@ -520,7 +520,7 @@ export const generateStorySegment = async (
   negativeInstructions: string,
   settings: ApiSettings
 ): Promise<string> => {
-  return ""; 
+  return "";
 };
 
 export const generateWorldChronicle = async (
@@ -537,7 +537,7 @@ export const generateWorldChronicle = async (
   }).join('\n\n');
 
   const historyDigest = storySegments.map((s, i) => {
-    return `[时间点 ${i+1}: ${s.timestamp}]\n${s.content}`;
+    return `[时间点 ${i + 1}: ${s.timestamp}]\n${s.content}`;
   }).join('\n\n');
 
   const prompt = `
@@ -581,12 +581,12 @@ export const generateWorldChronicle = async (
 };
 
 export const generateRelatedTechNode = async (
-    baseNode: TechNode,
-    relation: 'dependency' | 'unlock',
-    context: string,
-    settings: ApiSettings
+  baseNode: TechNode,
+  relation: 'dependency' | 'unlock',
+  context: string,
+  settings: ApiSettings
 ): Promise<Omit<TechNode, 'id'>> => {
-    const prompt = `
+  const prompt = `
     【任务】: 你是科技树设计师。
     【世界背景】: ${context}
     
@@ -608,32 +608,92 @@ export const generateRelatedTechNode = async (
     }
     `;
 
+  try {
+    const rawText = await generateText(settings, prompt, true);
+    let result: any = {};
     try {
-        const rawText = await generateText(settings, prompt, true);
-        let result: any = {};
-        try {
-            result = JSON.parse(rawText);
-        } catch (e) {
-            const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) result = JSON.parse(jsonMatch[0]);
-        }
-
-        return {
-            name: result.name || "未知技术",
-            description: result.description || "...",
-            era: result.era || baseNode.era,
-            type: result.type || baseNode.type,
-            status: 'concept'
-        };
-
-    } catch (error: any) {
-        handleApiError(error);
-        return {
-            name: "生成失败",
-            description: "请重试",
-            era: baseNode.era,
-            type: baseNode.type,
-            status: 'concept'
-        };
+      result = JSON.parse(rawText);
+    } catch (e) {
+      const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) result = JSON.parse(jsonMatch[0]);
     }
+
+    return {
+      name: result.name || "未知技术",
+      description: result.description || "...",
+      era: result.era || baseNode.era,
+      type: result.type || baseNode.type,
+      status: 'concept'
+    };
+
+  } catch (error: any) {
+    handleApiError(error);
+    return {
+      name: "生成失败",
+      description: "请重试",
+      era: baseNode.era,
+      type: baseNode.type,
+      status: 'concept'
+    };
+  }
+
+};
+
+export const generateCharacterProfile = async (
+  promptInput: string,
+  existingEntities: SocialEntity[],
+  settings: ApiSettings
+): Promise<SocialEntity> => {
+  // Basic context from existing entities (optional, but good for consistency)
+  const contextSnippet = existingEntities
+    .slice(0, 20) // Limit to avoid hitting token limits
+    .map(e => `${e.name} (${e.category})`)
+    .join(", ");
+
+  const prompt = `
+    任务: 你是一个小说人物设计师。请根据用户输入的设计要求，设计一个详细的人物卡。
+    
+    【现有世界人物参考】: ${contextSnippet || "无"}
+    
+    【用户设计要求】: "${promptInput}"
+    
+    请生成一个 JSON 对象，包含以下字段:
+    - name: 人物姓名
+    - description: 详细的人物小传（包括性格、外貌、背景故事，300字以内）
+    - validFrom: 该人物活跃的起始时间/章节 (可选，默认为"第一章")
+    
+    输出严格的 JSON 格式:
+    {
+      "name": "...",
+      "description": "...",
+      "validFrom": "..."
+    }
+    `;
+
+  try {
+    const rawText = await generateText(settings, prompt, true);
+    let result: any = {};
+    try {
+      result = JSON.parse(rawText);
+    } catch (e) {
+      const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) result = JSON.parse(jsonMatch[0]);
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      name: result.name || "新人物",
+      description: result.description || "...",
+      category: EntityCategory.PERSON,
+      validFrom: result.validFrom || "未知"
+    };
+  } catch (error: any) {
+    handleApiError(error);
+    return {
+      id: crypto.randomUUID(),
+      name: "生成失败",
+      description: "AI 生成失败，请重试。",
+      category: EntityCategory.PERSON
+    };
+  }
 };
