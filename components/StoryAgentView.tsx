@@ -7,9 +7,10 @@ import {
     Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock,
     ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react';
-import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog } from '../types';
+import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog, StoryArtifact } from '../types';
 import { executeAgentTask, executeReviewTask } from '../services/geminiService';
 import MilkdownEditor from './MilkdownEditor';
+import { Book, FileText, Code2, Database } from 'lucide-react';
 
 interface StoryAgentViewProps {
     agents: StoryAgent[];
@@ -39,6 +40,9 @@ interface StoryAgentViewProps {
     onUpdateStepOutputs: (val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
     generatedDraft: string;
     onUpdateGeneratedDraft: (val: string) => void;
+    // Artifacts State
+    artifacts: StoryArtifact[];
+    onUpdateArtifacts: (val: StoryArtifact[]) => void;
 }
 
 const DEFAULT_AGENTS: StoryAgent[] = [
@@ -59,15 +63,23 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     currentStepIndex, onUpdateCurrentStepIndex,
     executionLogs, onUpdateExecutionLogs,
     stepOutputs, onUpdateStepOutputs,
-    generatedDraft, onUpdateGeneratedDraft
+    generatedDraft, onUpdateGeneratedDraft,
+    artifacts, onUpdateArtifacts
 }) => {
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'workflow' | 'agents'>('workflow');
+    const [activeTab, setActiveTab] = useState<'workflow' | 'agents' | 'artifacts'>('workflow');
+
+    // View State
+    const [viewMode, setViewMode] = useState<'segment' | 'step' | 'artifact'>('segment');
+    const [activeStepId, setActiveStepId] = useState<string | null>(null);
+    const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
 
     // Derived UI State
     const [editingAgent, setEditingAgent] = useState<StoryAgent | null>(null);
     const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
+    // Notification State
+    const [latestArtifact, setLatestArtifact] = useState<StoryArtifact | null>(null);
 
     useEffect(() => {
         if (agents.length === 0) onUpdateAgents(DEFAULT_AGENTS);
@@ -112,6 +124,13 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
         const agent = getAgentById(step.agentId);
         onUpdateCurrentStepIndex(index);
         onUpdateWorkflowStatus('running');
+
+        onUpdateCurrentStepIndex(index);
+        onUpdateWorkflowStatus('running');
+
+        // REMOVED: Auto-switch to Detail View
+        // setViewMode('step');
+        // setActiveStepId(step.id);
 
         onUpdateExecutionLogs(prev => ({ // Updated
             ...prev,
@@ -181,6 +200,23 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             // Initial save of the output to editable state
             onUpdateStepOutputs(prev => ({ ...prev, [step.id]: content })); // Updated
 
+            // Artifact Generation
+            const newArtifact: StoryArtifact = {
+                id: crypto.randomUUID(),
+                title: `${step.name} Output`,
+                type: step.outputArtifactType || 'markdown',
+                content: content,
+                sourceStepId: step.id,
+                createdAt: Date.now()
+            };
+
+            onUpdateArtifacts([...artifacts, newArtifact]);
+
+            // Trigger Notification
+            setLatestArtifact(newArtifact);
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => setLatestArtifact(null), 5000);
+
             // PAUSE here for user intervention
             onUpdateWorkflowStatus('paused'); // Updated
 
@@ -245,11 +281,12 @@ ${contextText}
     // --- Render Helpers ---
 
     const renderCopilot = () => (
-        <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200 w-[500px] shrink-0 transition-all">
+        <div className="flex flex-col h-full bg-slate-50 border-l border-slate-200 w-[350px] shrink-0 transition-all">
             <div className="p-3 border-b border-slate-200 bg-white flex items-center justify-between">
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setActiveTab('workflow')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'workflow' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>工作流 (Workflow)</button>
                     <button onClick={() => setActiveTab('agents')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'agents' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Agents</button>
+                    <button onClick={() => setActiveTab('artifacts')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'artifacts' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>Artifacts</button>
                 </div>
                 <button onClick={() => setIsCopilotOpen(false)} className="text-slate-400 hover:text-slate-600"><Sidebar className="w-4 h-4" /></button>
             </div>
@@ -287,7 +324,7 @@ ${contextText}
                         </div>
 
                         {/* Workflow Steps List */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
                             {workflow.map((step, idx) => {
                                 const isCurrent = idx === currentStepIndex;
                                 const isPast = idx < currentStepIndex;
@@ -300,18 +337,26 @@ ${contextText}
                                         rounded-xl border transition-all duration-300
                                         ${isCurrent ? 'bg-white border-indigo-400 shadow-md ring-1 ring-indigo-400' : ''}
                                         ${isPast ? 'bg-white border-slate-200 opacity-80' : ''}
-                                        ${isPending ? 'bg-slate-100 border-slate-200 opacity-50' : ''}
-                                    `}>
+                                        ${isPending ? 'bg-slate-100 border-slate-200' : ''}
+                                        ${log?.status === 'completed' ? 'cursor-pointer hover:border-indigo-300 focus:ring-2 focus:ring-indigo-200' : 'cursor-default'}
+                                    `}
+                                        onClick={() => {
+                                            if (log?.status === 'completed') {
+                                                setViewMode('step');
+                                                setActiveStepId(step.id);
+                                            }
+                                        }}
+                                    >
                                         {/* Step Header */}
-                                        <div className="p-3 flex items-start justify-between border-b border-slate-50">
+                                        <div className="p-2 flex items-start justify-between border-b border-slate-50">
                                             <div className="flex items-center gap-2">
-                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
                                                     {idx + 1}
                                                 </div>
                                                 <div>
-                                                    <div className="text-sm font-bold text-slate-700">{step.name}</div>
-                                                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                                                        <Bot className="w-3 h-3" /> {getAgentById(step.agentId)?.name}
+                                                    <div className="text-xs font-bold text-slate-900">{step.name}</div>
+                                                    <div className="text-[9px] text-slate-500 flex items-center gap-1">
+                                                        <Bot className="w-2.5 h-2.5" /> {getAgentById(step.agentId)?.name}
                                                     </div>
                                                 </div>
                                             </div>
@@ -335,7 +380,7 @@ ${contextText}
                                         </div>
 
                                         {/* Step Content / Editor */}
-                                        <div className="p-3 pt-0">
+                                        <div className="p-2 pt-0">
                                             {/* Logic: 
                                                 If running -> show live logs
                                                 If completed -> show Editor with "output"
@@ -344,7 +389,7 @@ ${contextText}
 
                                             {/* Preview Instruction */}
                                             {(!log && isPending) && (
-                                                <div className="text-xs text-slate-500 italic mt-1">{step.instruction}</div>
+                                                <div className="text-xs text-slate-600 italic mt-1">{step.instruction}</div>
                                             )}
 
                                             {/* Reviewer Badge */}
@@ -368,16 +413,26 @@ ${contextText}
                                                 </div>
                                             )}
 
-                                            {/* Result Editor */}
                                             {log?.status === 'completed' && (
                                                 <div className="mt-2 animate-fadeIn">
-                                                    <textarea
-                                                        className={`w-full text-xs p-2 border rounded-md focus:ring-2 focus:ring-indigo-300 resize-y min-h-[120px] 
-                                                            ${isCurrent ? 'bg-white border-indigo-200 text-slate-800' : 'bg-slate-50 border-slate-200 text-slate-500'}
-                                                        `}
-                                                        value={output || ""}
-                                                        onChange={(e) => onUpdateStepOutputs(prev => ({ ...prev, [step.id]: e.target.value }))}
-                                                    />
+                                                    {(() => {
+                                                        const artifact = artifacts.find(a => a.sourceStepId === step.id);
+                                                        if (artifact) {
+                                                            return (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setViewMode('artifact');
+                                                                        setActiveArtifactId(artifact.id);
+                                                                    }}
+                                                                    className="w-full py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-md text-[10px] font-bold hover:bg-indigo-100 flex items-center justify-center gap-1 mb-1"
+                                                                >
+                                                                    <Sparkles className="w-2.5 h-2.5" /> 查看生成结果 (View Artifact)
+                                                                </button>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()}
 
                                                     {/* Actions (Only show for current step when paused) */}
                                                     {isCurrent && workflowStatus === 'paused' && (
@@ -450,6 +505,37 @@ ${contextText}
                         </div>
                     </div>
                 )}
+
+                {activeTab === 'artifacts' && (
+                    <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50 space-y-3">
+                        {artifacts.length === 0 ? (
+                            <div className="text-center text-slate-400 text-xs mt-10">暂无 Artifacts</div>
+                        ) : (
+                            artifacts.map(art => (
+                                <div
+                                    key={art.id}
+                                    onClick={() => {
+                                        setViewMode('artifact');
+                                        setActiveArtifactId(art.id);
+                                    }}
+                                    className="bg-white p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-md cursor-pointer transition-all group"
+                                >
+                                    <div className="flex items-center gap-2 mb-1">
+                                        {art.type === 'markdown' ? <FileText className="w-4 h-4 text-emerald-500" /> :
+                                            art.type === 'code' ? <Code2 className="w-4 h-4 text-amber-500" /> :
+                                                art.type === 'json' ? <Database className="w-4 h-4 text-purple-500" /> :
+                                                    <Book className="w-4 h-4 text-indigo-500" />}
+                                        <div className="text-xs font-bold text-slate-700 truncate">{art.title}</div>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 flex justify-between">
+                                        <span>{new Date(art.createdAt).toLocaleTimeString()}</span>
+                                        <span className="uppercase">{art.type}</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Editor Modals for Steps/Agents */}
@@ -474,8 +560,22 @@ ${contextText}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">执行指令</label>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">执行指令 (Instruction)</label>
                                         <textarea className="w-full border p-2 text-xs rounded h-32" value={editingStep.instruction} onChange={e => setEditingStep({ ...editingStep, instruction: e.target.value })} />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">输出类型 (Artifact Type)</label>
+                                        <select
+                                            className="w-full border p-2 text-xs rounded bg-white"
+                                            value={editingStep.outputArtifactType || 'markdown'}
+                                            onChange={e => setEditingStep({ ...editingStep, outputArtifactType: e.target.value as any })}
+                                        >
+                                            <option value="markdown">Markdown 文档</option>
+                                            <option value="text">纯文本 (Text)</option>
+                                            <option value="code">代码 (Code)</option>
+                                            <option value="json">数据 (JSON)</option>
+                                        </select>
                                     </div>
 
                                     <div className="border border-slate-200 rounded p-3 bg-slate-50">
@@ -574,17 +674,170 @@ ${contextText}
                         </div>
                     </div>
                 </div>
+
             )}
         </div>
+
     );
-    return (
-        <div className="flex h-full w-full bg-white overflow-hidden">
-            {renderCopilot()}
-            <div className="flex-1 flex flex-col h-full bg-slate-50 relative">
-                {/* Placeholder for Editor Integration */}
-                <div className="flex-1 flex items-center justify-center text-slate-400">
-                    <p>Select a story segment to edit (Editor Integration Pending)</p>
+
+    // Toast Notification Component
+    const renderNotification = () => {
+        if (!latestArtifact) return null;
+        return (
+            <div className="absolute bottom-6 right-6 z-50 animate-slideUp">
+                <div className="bg-slate-900/90 text-white p-4 rounded-xl shadow-2xl backdrop-blur-sm border border-slate-700 flex items-center gap-4 max-w-sm">
+                    <div className="bg-indigo-500/20 p-2 rounded-lg">
+                        <Sparkles className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm">Artifact Generated</h4>
+                        <p className="text-xs text-slate-300 truncate">{latestArtifact.title}</p>
+                    </div>
+                    <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
+                        <button
+                            onClick={() => {
+                                setViewMode('artifact');
+                                setActiveArtifactId(latestArtifact.id);
+                                setLatestArtifact(null);
+                            }}
+                            className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                            Open
+                        </button>
+                        <button
+                            onClick={() => setLatestArtifact(null)}
+                            className="text-slate-500 hover:text-white transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="flex h-full w-full bg-white overflow-hidden relative">
+            {renderCopilot()}
+            <div className="flex-1 flex flex-col h-full bg-slate-50 relative border-l border-slate-200 shadow-sm">
+                {/* Main Content Area */}
+                {viewMode === 'segment' && (
+                    <div className="flex-1 flex items-center justify-center text-slate-400">
+                        <p>Select a story segment to edit (Editor Integration Pending)</p>
+                    </div>
+                )}
+
+                {viewMode === 'step' && (
+                    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+                        {activeStepId && workflow.find(s => s.id === activeStepId) ? (
+                            (() => {
+                                const step = workflow.find(s => s.id === activeStepId)!;
+                                const agent = getAgentById(step.agentId);
+                                const output = stepOutputs[step.id] || "";
+                                const log = executionLogs[step.id];
+
+                                return (
+                                    <div className="flex flex-col h-full animate-fadeIn">
+                                        {/* Detail Header */}
+                                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                                            <div>
+                                                <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                                    {step.name}
+                                                    {(log?.status === 'generating' || log?.status === 'reviewing' || log?.status === 'revising') && <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />}
+                                                </div>
+                                                <div className="text-xs text-slate-500 flex items-center gap-2 mt-1">
+                                                    <span className={`px-2 py-0.5 rounded-full text-white font-bold ${agent.color} flex items-center gap-1`}>
+                                                        <Bot className="w-3 h-3" /> {agent.name}
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span className="italic">"{step.instruction.slice(0, 50)}..."</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setViewMode('segment')} className="text-slate-400 hover:text-slate-600">
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Large Output Editor */}
+                                        <div className="flex-1 bg-slate-50 overflow-hidden relative">
+                                            <div className="absolute inset-0 pb-16"> {/* Padding for footer */}
+                                                <MilkdownEditor
+                                                    content={output}
+                                                    onChange={(val) => onUpdateStepOutputs(prev => ({ ...prev, [step.id]: val }))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Footer Actions */}
+                                        <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-3">
+                                            {log?.status === 'completed' && workflowStatus === 'paused' && currentStepIndex === workflow.findIndex(s => s.id === step.id) && (
+                                                <button
+                                                    onClick={() => handleContinue(currentStepIndex)}
+                                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition-all flex items-center gap-2"
+                                                >
+                                                    <ArrowRight className="w-4 h-4" /> 确认并继续 (Confirm & Continue)
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-slate-400">
+                                <p>Select a step to view details</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {viewMode === 'artifact' && (
+                    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+                        {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
+                            (() => {
+                                const art = artifacts.find(a => a.id === activeArtifactId)!;
+                                return (
+                                    <div className="flex flex-col h-full animate-fadeIn">
+                                        {/* Artifact Header */}
+                                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                                            <div>
+                                                <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                                    {art.title}
+                                                </div>
+                                                <div className="text-xs text-slate-500 flex items-center gap-2 mt-1 uppercase">
+                                                    {art.type} • {new Date(art.createdAt).toLocaleString()}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setViewMode('segment')} className="text-slate-400 hover:text-slate-600">
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Artifact Content */}
+                                        <div className="flex-1 bg-slate-50 overflow-hidden relative">
+                                            <div className="absolute inset-0 pb-16">
+                                                <MilkdownEditor
+                                                    content={art.content}
+                                                    onChange={(val) => {
+                                                        // Update artifact content
+                                                        onUpdateArtifacts(artifacts.map(a => a.id === art.id ? { ...a, content: val } : a));
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-slate-400">
+                                <p>Select an artifact to view</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -360,6 +360,8 @@ const App: React.FC = () => {
                         onUpdateStepOutputs={storyEngine.setStepOutputs}
                         generatedDraft={storyEngine.generatedDraft}
                         onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
+                        artifacts={storyEngine.artifacts}
+                        onUpdateArtifacts={storyEngine.setArtifacts}
                      />
                   )
                }
