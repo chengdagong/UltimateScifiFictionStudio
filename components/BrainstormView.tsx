@@ -3,6 +3,8 @@ import {
     Send, Plus, MessageSquare, Trash2, Settings2,
     Bot, User, Sparkles, MoreVertical, X, Save
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { BrainstormSession, BrainstormMessage, BrainstormConfig, ApiSettings } from '../types';
 import { sendChatMessage } from '../services/chatService';
 
@@ -255,8 +257,14 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.role === 'user' ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white'}`}>
                                 {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                             </div>
-                            <div className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-slate-100 text-slate-800 rounded-tr-none' : 'bg-indigo-50/50 text-slate-800 border border-indigo-100 rounded-tl-none'}`}>
-                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                            <div className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-slate-100 text-slate-800 rounded-tr-none' : 'bg-indigo-50/50 text-slate-800 border border-indigo-100 rounded-tl-none prose prose-sm max-w-none'}`}>
+                                {msg.role === 'user' ? (
+                                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                                ) : (
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {msg.content}
+                                    </ReactMarkdown>
+                                )}
                                 <div className="mt-2 text-[10px] opacity-40 text-right">
                                     {new Date(msg.timestamp).toLocaleTimeString()}
                                 </div>
