@@ -194,23 +194,61 @@ export const generateEntitiesForLayer = async (
 export const importWorldFromText = async (
   storyText: string,
   settings: ApiSettings
-): Promise<{ context: string, entities: SocialEntity[] }> => {
+): Promise<{
+  context: string,
+  entities: SocialEntity[],
+  relationships: EntityRelationship[],
+  entityStates: EntityState[],
+  storySegments: StorySegment[],
+  technologies: TechNode[],
+  techDependencies: TechDependency[]
+}> => {
   const prompt = `
-    任务: 分析以下文本，提取世界观背景和社会实体。
+    任务: 分析以下文本，不仅仅是提取实体，而是要**重建**整个世界模型，包括其时间线、技术树和实体的历史演变。
     
     【文本内容】
     ${storyText.slice(0, 15000)}
 
+    【合法类别清单 (Category Lists)】:
+    - person: 具体的人物、关键角色。
+    - org: 组织、团体、政党、公司、家族、政府机构。
+    - place: 地点、城市、环境、空间。
+    - event: 历史事件、战争、条约签署。
+    - tech: 技术、工具、武器、基础设施。
+    - resource: 资源、矿产、货币、物资。
+    - belief: 信仰、宗教、法律、意识形态、概念。
+
     要求:
-    1. 总结一段"世界背景" (context)。
-    2. 提取所有关键的社会实体 (人物、组织、地点、物品、事件、信仰等)。
-    3. 为每个实体分配一个类别 (category)。
-    
+    1. **Context**: 总结一段"世界背景" (context)。
+    2. **Entities**: 提取关键社会实体。
+       - 'category': 必须严格遵循上述清单。
+       - 'validFrom'/'validTo': 根据文本推断其活跃或存在的时期 (如 "2050年", "大萧条时期")。
+    3. **Relationships**: 提取实体间关系。
+       - 必须明确源头(sourceName)和目标(targetName)。
+    4. **Timeline**: 提取文本中提及的关键情节或历史事件作为时间线节点 (StorySegments)。
+       - 'participantNames': 列出参与该事件的实体名称。
+    5. **Technologies**: 提取文中出现或暗示的技术 (TechNodes)。
+       - 'era': 该技术出现的时期。
+       - 'status': 推断其成熟度 (concept/prototype/production/obsolete)。
+    6. **EntityStates**: 如果文中有描述实体在特定时间点的具体状态 (如 "他在2050年很穷，但在2060年成为了富豪")，请提取为状态快照。
+
     输出严格的 JSON 格式:
     {
       "context": "...",
       "entities": [
-        { "name": "...", "description": "...", "category": "..." }
+        { "name": "...", "description": "...", "category": "...", "validFrom": "...", "validTo": "..." }
+      ],
+      "relationships": [
+        { "sourceName": "...", "targetName": "...", "type": "...", "description": "..." }
+      ],
+      "timeline": [
+        { "timestamp": "...", "content": "...", "participantNames": ["..."] }
+      ],
+      "technologies": [
+        { "name": "...", "description": "...", "era": "...", "type": "civil", "status": "production" }
+      ],
+      "entityStates": [
+        { "entityName": "...", "timestamp": "...", "description": "..." }
       ]
     }
   `;
@@ -220,20 +258,99 @@ export const importWorldFromText = async (
     const result = JSON.parse(rawText || "{}");
 
     const context = result.context || "导入的世界";
-    const rawEntities = Array.isArray(result.entities) ? result.entities : [];
 
-    const entities: SocialEntity[] = rawEntities.map((e: any) => ({
+    // Helper to safely get arrays
+    const getArr = (x: any) => Array.isArray(x) ? x : [];
+
+    const rawEntities = getArr(result.entities);
+    const rawRels = getArr(result.relationships);
+    const rawTimeline = getArr(result.timeline);
+    const rawTech = getArr(result.technologies);
+    const rawStates = getArr(result.entityStates);
+
+    // 1. Entities & ID Map
+    const nameToIdMap: Record<string, string> = {};
+    const entities: SocialEntity[] = rawEntities.map((e: any) => {
+      const id = crypto.randomUUID();
+      const name = e.name || "未知实体";
+      nameToIdMap[name] = id;
+      return {
+        id: id,
+        name: name,
+        description: e.description || "",
+        category: e.category as EntityCategory || EntityCategory.UNKNOWN,
+        validFrom: e.validFrom,
+        validTo: e.validTo
+      };
+    });
+
+    // Helper for fuzzy name matching
+    const findIdByName = (name: string): string | undefined => {
+      if (!name) return undefined;
+      if (nameToIdMap[name]) return nameToIdMap[name];
+      const foundName = Object.keys(nameToIdMap).find(k => k.includes(name) || name.includes(k));
+      return foundName ? nameToIdMap[foundName] : undefined;
+    };
+
+    // 2. Relationships
+    const relationships: EntityRelationship[] = rawRels.map((r: any) => {
+      const sourceId = findIdByName(r.sourceName);
+      const targetId = findIdByName(r.targetName);
+      if (!sourceId || !targetId || sourceId === targetId) return null;
+      return {
+        id: crypto.randomUUID(),
+        sourceId,
+        targetId,
+        type: r.type || "相关",
+        description: r.description || ""
+      };
+    }).filter((r: unknown): r is EntityRelationship => r !== null);
+
+    // 3. Timeline (StorySegments)
+    const storySegments: StorySegment[] = rawTimeline.map((t: any) => ({
       id: crypto.randomUUID(),
-      name: e.name || "未知实体",
-      description: e.description || "",
-      category: e.category as EntityCategory || EntityCategory.UNKNOWN
+      timestamp: t.timestamp || "未知时间",
+      content: t.content || "",
+      influencedBy: Array.isArray(t.participantNames)
+        ? t.participantNames.map((n: string) => findIdByName(n)).filter((id: string) => !!id)
+        : []
     }));
 
-    return { context, entities };
+    // 4. Technologies
+    const technologies: TechNode[] = rawTech.map((t: any) => ({
+      id: crypto.randomUUID(),
+      name: t.name || "未命名技术",
+      description: t.description || "",
+      era: t.era || "Unknown Era",
+      type: t.type || 'civil',
+      status: t.status || 'production'
+    }));
+
+    // 5. Entity States
+    const entityStates: EntityState[] = rawStates.map((s: any) => {
+      const eId = findIdByName(s.entityName);
+      if (!eId) return null;
+      return {
+        id: crypto.randomUUID(),
+        entityId: eId,
+        timestamp: s.timestamp || "未知时间",
+        description: s.description || ""
+      };
+    }).filter((s: unknown): s is EntityState => s !== null);
+
+    return {
+      context,
+      entities,
+      relationships,
+      storySegments,
+      technologies,
+      techDependencies: [], // Tech dependencies are hard to extract textually without explicit guidance, leaving empty for now
+      entityStates
+    };
 
   } catch (error: any) {
     handleApiError(error);
-    return { context: "", entities: [] };
+    return { context: "", entities: [], relationships: [], storySegments: [], technologies: [], techDependencies: [], entityStates: [] };
   }
 };
 

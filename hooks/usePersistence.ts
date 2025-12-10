@@ -124,20 +124,24 @@ export const usePersistence = ({
             worldModel.setWorldContext(result.context);
             worldModel.setModel({
                 entities: result.entities,
-                relationships: [],
-                entityStates: [],
-                technologies: [],
-                techDependencies: []
+                relationships: result.relationships,
+                entityStates: result.entityStates || [],
+                technologies: result.technologies || [],
+                techDependencies: result.techDependencies || []
             });
             setWorldName("导入的世界");
 
-            const newSegment: StorySegment = {
-                id: crypto.randomUUID(),
-                timestamp: "原始文本",
-                content: importText,
-                influencedBy: []
-            };
-            worldModel.setStorySegments([newSegment]);
+            // Use extracted story segments if available, otherwise fallback to raw text
+            if (result.storySegments && result.storySegments.length > 0) {
+                worldModel.setStorySegments(result.storySegments);
+            } else {
+                worldModel.setStorySegments([{
+                    id: crypto.randomUUID(),
+                    timestamp: "原始文本",
+                    content: importText,
+                    influencedBy: []
+                }]);
+            }
             setActiveTab('story');
             setCurrentWorldId(undefined);
             storyEngine.resetStoryEngine();

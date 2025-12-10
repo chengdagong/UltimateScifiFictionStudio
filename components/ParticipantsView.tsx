@@ -170,14 +170,46 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
         layer,
         entities: entitiesInLayer
       };
-    }).filter(g => {
+    });
+
+    // 3. Catch Unclassified Entities
+    // Find entities that were NOT caught by any layer above
+    const classifiedEntityIds = new Set<string>();
+    groups.forEach(g => g.entities.forEach(e => classifiedEntityIds.add(e.id)));
+
+    const unclassifiedEntities = filtered.filter(e => !classifiedEntityIds.has(e.id));
+
+    if (unclassifiedEntities.length > 0) {
+      // Check if we already have an "Unknown" or "Uncategorized" layer in the framework
+      // If so, merge them. If not, create a virtual one.
+      const unknownLayerIndex = groups.findIndex(g =>
+        g.layer.id === 'layer_unknown' ||
+        g.layer.allowedCategories.includes(EntityCategory.UNKNOWN)
+      );
+
+      if (unknownLayerIndex !== -1) {
+        groups[unknownLayerIndex].entities.push(...unclassifiedEntities);
+      } else {
+        // Create a virtual "Other" layer
+        groups.push({
+          layer: {
+            id: 'layer_virtual_other',
+            title: '未分类 (Other)',
+            description: '未归类到当前框架的实体',
+            colorClass: 'bg-slate-100 border-slate-300 text-slate-500',
+            allowedCategories: [EntityCategory.UNKNOWN] // Fallback
+          },
+          entities: unclassifiedEntities
+        });
+      }
+    }
+
+    return groups.filter(g => {
       // Show if has entities OR if the layer supports the active category (so we can add)
       if (g.entities.length > 0) return true;
       if (activeCategory === 'all') return true;
       return g.layer.allowedCategories.includes(activeCategory);
     });
-
-    return groups;
   }, [model.entities, framework, activeCategory, searchTerm, viewTime]);
 
   const getCategoryCount = (cat: EntityCategory) => {
@@ -673,10 +705,18 @@ const RelationshipEditor: React.FC<{
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">{isSource ? '是' : '被'}</span>
-                      <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">{rel.type}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">{isSource ? '于' : '由'}</span>
-                      <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || "未知"}</span>
+                      {isSource ? (
+                        <>
+                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">{rel.type}</span>
+                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || "未知"}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">被</span>
+                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || "未知"}</span>
+                          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">{rel.type}</span>
+                        </>
+                      )}
 
                       {/* Timestamp Tag (Snapshot) */}
                       {rel.timestamp && (
