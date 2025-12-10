@@ -87,7 +87,7 @@ export interface WorldModel {
   entities: SocialEntity[];
   relationships: EntityRelationship[];
   entityStates: EntityState[];
-  
+
   // Tech Tree
   technologies: TechNode[];
   techDependencies: TechDependency[];
@@ -100,7 +100,7 @@ export interface LayerDefinition {
   colorClass: string;
   isTimeDimension?: boolean;
   // Which categories of entities belong to this layer in this framework?
-  allowedCategories: EntityCategory[]; 
+  allowedCategories: EntityCategory[];
 }
 
 export interface FrameworkDefinition {
@@ -128,7 +128,7 @@ export interface WorldData {
   storySegments: StorySegment[];
   currentTimeSetting: string;
   chronicleText?: string;
-  
+
   // Agent System Data
   agents: StoryAgent[];
   workflow: WorkflowStep[];
@@ -170,4 +170,16 @@ export interface BrainstormSession {
   config: BrainstormConfig;
   createdAt: number;
   lastModified: number;
+}
+
+export interface StepExecutionLog {
+  status: 'pending' | 'generating' | 'reviewing' | 'revising' | 'completed' | 'failed';
+  content: string;
+  attempts: {
+    round: number;
+    output: string;
+    critique?: string;
+    verdict?: 'PASS' | 'FAIL';
+  }[];
+  error?: string;
 }

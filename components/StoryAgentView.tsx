@@ -7,7 +7,7 @@ import {
     Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock,
     ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react';
-import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment } from '../types';
+import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog } from '../types';
 import { executeAgentTask, executeReviewTask } from '../services/geminiService';
 import MilkdownEditor from './MilkdownEditor';
 
@@ -25,18 +25,20 @@ interface StoryAgentViewProps {
     onAddStorySegment: (content: string) => void;
     onUpdateStorySegment: (id: string, content: string, timestamp?: string) => void;
     onRemoveStorySegment: (id: string) => void;
-}
 
-interface StepExecutionLog {
-    status: 'pending' | 'generating' | 'reviewing' | 'revising' | 'completed' | 'failed';
-    content: string;
-    attempts: {
-        round: number;
-        output: string;
-        critique?: string;
-        verdict?: 'PASS' | 'FAIL';
-    }[];
-    error?: string;
+    // Lifted State
+    storyGuidance: string;
+    onUpdateStoryGuidance: (val: string) => void;
+    workflowStatus: 'idle' | 'running' | 'paused' | 'completed';
+    onUpdateWorkflowStatus: (val: 'idle' | 'running' | 'paused' | 'completed') => void;
+    currentStepIndex: number;
+    onUpdateCurrentStepIndex: (val: number) => void;
+    executionLogs: Record<string, StepExecutionLog>;
+    onUpdateExecutionLogs: (val: Record<string, StepExecutionLog> | ((prev: Record<string, StepExecutionLog>) => Record<string, StepExecutionLog>)) => void;
+    stepOutputs: Record<string, string>;
+    onUpdateStepOutputs: (val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
+    generatedDraft: string;
+    onUpdateGeneratedDraft: (val: string) => void;
 }
 
 const DEFAULT_AGENTS: StoryAgent[] = [
@@ -50,21 +52,20 @@ const DEFAULT_AGENTS: StoryAgent[] = [
 
 const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     agents, workflow, model, framework, worldContext, storySegments, settings, currentTimeSetting,
-    onUpdateAgents, onUpdateWorkflow, onAddStorySegment, onUpdateStorySegment, onRemoveStorySegment
+    onUpdateAgents, onUpdateWorkflow, onAddStorySegment, onUpdateStorySegment, onRemoveStorySegment,
+    // De-structure new props
+    storyGuidance, onUpdateStoryGuidance,
+    workflowStatus, onUpdateWorkflowStatus,
+    currentStepIndex, onUpdateCurrentStepIndex,
+    executionLogs, onUpdateExecutionLogs,
+    stepOutputs, onUpdateStepOutputs,
+    generatedDraft, onUpdateGeneratedDraft
 }) => {
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<'workflow' | 'agents'>('workflow');
 
-    // Workflow State
-    const [storyGuidance, setStoryGuidance] = useState("");
-    const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
-    const [currentStepIndex, setCurrentStepIndex] = useState(-1);
-    const [executionLogs, setExecutionLogs] = useState<Record<string, StepExecutionLog>>({});
-
-    // We track the *editable* output for each step here.
-    const [stepOutputs, setStepOutputs] = useState<Record<string, string>>({});
-
+    // Derived UI State
     const [editingAgent, setEditingAgent] = useState<StoryAgent | null>(null);
     const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
 
@@ -103,16 +104,16 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
     const executeStep = async (index: number, inputContext: string) => {
         if (index >= workflow.length) {
-            setWorkflowStatus('completed');
+            onUpdateWorkflowStatus('completed');
             return;
         }
 
         const step = workflow[index];
         const agent = getAgentById(step.agentId);
-        setCurrentStepIndex(index);
-        setWorkflowStatus('running');
+        onUpdateCurrentStepIndex(index);
+        onUpdateWorkflowStatus('running');
 
-        setExecutionLogs(prev => ({
+        onUpdateExecutionLogs(prev => ({ // Updated
             ...prev,
             [step.id]: { status: 'generating', content: '', attempts: [] }
         }));
@@ -127,7 +128,7 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             // Iteration Loop (Internal to the step)
             while (!isApproved && currentRound <= maxRetries + 1) {
                 const status = currentRound > 1 ? 'revising' : 'generating';
-                setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } }));
+                onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } })); // Updated
 
                 // 1. Generate
                 content = await executeAgentTask(
@@ -143,7 +144,7 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 );
 
                 // Update Log
-                setExecutionLogs(prev => {
+                onUpdateExecutionLogs(prev => { // Updated
                     const logs = prev[step.id]!;
                     const newAttempts = [...logs.attempts];
                     if (newAttempts[currentRound - 1]) newAttempts[currentRound - 1].output = content;
@@ -153,11 +154,11 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
                 // 2. Validate (if needed)
                 if (step.validation) {
-                    setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } }));
+                    onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } })); // Updated
                     const reviewer = getAgentById(step.validation.reviewerId);
                     const reviewResult = await executeReviewTask(reviewer, content, step.validation.criteria, model, framework, worldContext, settings);
 
-                    setExecutionLogs(prev => {
+                    onUpdateExecutionLogs(prev => { // Updated
                         const logs = prev[step.id]!;
                         const newAttempts = [...logs.attempts];
                         newAttempts[currentRound - 1].critique = reviewResult.feedback;
@@ -175,21 +176,21 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 }
             }
 
-            setExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } }));
+            onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } })); // Updated
 
             // Initial save of the output to editable state
-            setStepOutputs(prev => ({ ...prev, [step.id]: content }));
+            onUpdateStepOutputs(prev => ({ ...prev, [step.id]: content })); // Updated
 
             // PAUSE here for user intervention
-            setWorkflowStatus('paused');
+            onUpdateWorkflowStatus('paused'); // Updated
 
         } catch (e: any) {
             console.error(e);
-            setExecutionLogs(prev => ({
+            onUpdateExecutionLogs(prev => ({ // Updated
                 ...prev,
                 [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
             }));
-            setWorkflowStatus('paused'); // Allow retry?
+            onUpdateWorkflowStatus('paused'); // Allow retry?
             alert(`Step Failed: ${e.message}`);
         }
     };
@@ -199,9 +200,9 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
         if (!storyGuidance.trim()) return alert("请输入剧情指引");
 
         // Reset
-        setExecutionLogs({});
-        setStepOutputs({});
-        setCurrentStepIndex(-1);
+        onUpdateExecutionLogs({}); // Updated
+        onUpdateStepOutputs({}); // Updated
+        onUpdateCurrentStepIndex(-1); // Updated
 
         // Prepare initial context
         let contextSegments = storySegments;
@@ -237,8 +238,8 @@ ${contextText}
         } else {
             onAddStorySegment(content);
         }
-        setGeneratedDraft(""); // Clear
-        setWorkflowStatus('idle');
+        onUpdateGeneratedDraft(""); // Updated
+        onUpdateWorkflowStatus('idle'); // Updated
     };
 
     // --- Render Helpers ---
@@ -266,7 +267,7 @@ ${contextText}
                                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none resize-none h-16"
                                     placeholder="输入本章的核心冲突..."
                                     value={storyGuidance}
-                                    onChange={(e) => setStoryGuidance(e.target.value)}
+                                    onChange={(e) => onUpdateStoryGuidance(e.target.value)}
                                     disabled={workflowStatus === 'running'}
                                 />
                             </div>
@@ -375,7 +376,7 @@ ${contextText}
                                                             ${isCurrent ? 'bg-white border-indigo-200 text-slate-800' : 'bg-slate-50 border-slate-200 text-slate-500'}
                                                         `}
                                                         value={output || ""}
-                                                        onChange={(e) => setStepOutputs(prev => ({ ...prev, [step.id]: e.target.value }))}
+                                                        onChange={(e) => onUpdateStepOutputs(prev => ({ ...prev, [step.id]: e.target.value }))}
                                                     />
 
                                                     {/* Actions (Only show for current step when paused) */}
@@ -574,6 +575,17 @@ ${contextText}
                     </div>
                 </div>
             )}
+        </div>
+    );
+    return (
+        <div className="flex h-full w-full bg-white overflow-hidden">
+            {renderCopilot()}
+            <div className="flex-1 flex flex-col h-full bg-slate-50 relative">
+                {/* Placeholder for Editor Integration */}
+                <div className="flex-1 flex items-center justify-center text-slate-400">
+                    <p>Select a story segment to edit (Editor Integration Pending)</p>
+                </div>
+            </div>
         </div>
     );
 };

@@ -99,15 +99,50 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
 
          // const ERA_WIDTH = 250; // Moved to top level constant
 
-         // Setup Zoom
+         // Setup Groups: Content (g) and Header (headerG)
          const g = svg.append("g");
+         const headerG = svg.append("g").attr("class", "sticky-header");
+
+         // Header Background
+         headerG.append("rect")
+            .attr("width", "100%")
+            .attr("height", 50)
+            .attr("fill", "rgba(255, 255, 255, 0.9)")
+            .attr("class", "backdrop-blur-md border-b border-slate-200");
+
+         // Initial Era Labels (will be positioned by zoom)
+         const eraLabels = headerG.selectAll("text.era-label")
+            .data(graphData.eras)
+            .join("text")
+            .attr("class", "era-label")
+            .text(d => d)
+            .attr("y", 30)
+            .attr("font-size", 14)
+            .attr("font-weight", "bold")
+            .attr("fill", "#64748b")
+            .attr("text-anchor", "middle")
+            .style("pointer-events", "none");
+
+         // Zoom Behavior
+         const zoomed = (event: any) => {
+            const t = event.transform;
+            g.attr("transform", t);
+
+            // Update Header Labels (Sync X, Fix Y)
+            eraLabels.attr("x", (d, i) => t.applyX(i * ERA_WIDTH + ERA_WIDTH / 2));
+         };
+
          const zoom = d3.zoom()
             .scaleExtent([0.2, 3])
-            .on("zoom", (event: any) => g.attr("transform", event.transform));
-         svg.call(zoom);
-         svg.call(zoom.transform, d3.zoomIdentity.translate(50, 50).scale(0.8));
+            .on("zoom", zoomed);
 
-         // Draw Eras (Background Columns)
+         svg.call(zoom);
+
+         // Initial Transform (Center 2020s if possible, or just default)
+         const initialTransform = d3.zoomIdentity.translate(50, 60).scale(0.8); // Shift down y=60 to clear header
+         svg.call(zoom.transform, initialTransform);
+
+         // Draw Era Background Columns (In Content Group)
          graphData.eras.forEach((era, i) => {
             g.append("rect")
                .attr("x", i * ERA_WIDTH)
@@ -117,27 +152,19 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                .attr("fill", i % 2 === 0 ? "#f8fafc" : "#f1f5f9")
                .attr("opacity", 0.5);
 
-            g.append("text")
-               .attr("x", i * ERA_WIDTH + 10)
-               .attr("y", -50)
-               .text(era)
-               .attr("font-size", 14)
-               .attr("font-weight", "bold")
-               .attr("fill", "#64748b")
-               .attr("letter-spacing", "0.05em");
+            // Note: Labels moved to headerG
          });
 
          // Force Simulation
-         // We constrain X based on Era, let Y float
          const simulation = d3.forceSimulation(graphData.nodes as any)
             .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(100))
-            .force("collide", d3.forceCollide().radius(80)) // Increased radius to prevent overlap
+            .force("collide", d3.forceCollide().radius(80))
             .force("charge", d3.forceManyBody().strength(-200))
             .force("x", d3.forceX((d: any) => d.eraIndex * ERA_WIDTH + ERA_WIDTH / 2).strength(1.5))
             .force("y", d3.forceY(height / 2).strength(0.05));
 
          // Define Markers
-         const defs = svg.append("defs");
+         const defs = svg.append("defs"); // Defs should be attached to SVG root usually, or handled carefully if cleared
          defs.append("marker")
             .attr("id", "arrow-tech")
             .attr("viewBox", "0 -5 10 10")
