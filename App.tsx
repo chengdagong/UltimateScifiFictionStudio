@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle } from 'lucide-react';
+
 
 // Components
 import ParticipantsView from './components/ParticipantsView';
@@ -11,6 +12,11 @@ import CharacterCardView from './components/CharacterCardView';
 import BrainstormView from './components/BrainstormView';
 import SettingsModal from './components/SettingsModal';
 import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
+import { StatusBar } from './components/StatusBar';
+import { GitHubConnectModal } from './components/GitHubConnectModal';
+import { RepoSelectionModal } from './components/RepoSelectionModal';
+
+import { useGitHub } from './components/GitHubContext';
 
 // Hooks
 import { useApiSettings } from './hooks/useApiSettings';
@@ -29,6 +35,24 @@ const App: React.FC = () => {
    const [newWorldTab, setNewWorldTab] = useState<'empty' | 'presets' | 'import'>('empty');
    const [importText, setImportText] = useState("");
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
+   const [showGitHubConnectModal, setShowGitHubConnectModal] = useState(false);
+   const [showRepoSelectionModal, setShowRepoSelectionModal] = useState(false);
+
+   const { login, logout, user: githubUser, isLoading: isGithubLoading, currentRepo } = useGitHub();
+
+   // Check for GitHub connection on startup
+   useEffect(() => {
+      if (!isGithubLoading) {
+         if (!githubUser) {
+            // Prompt to connect if not connected (delayed)
+            const timer = setTimeout(() => setShowGitHubConnectModal(true), 2000);
+            return () => clearTimeout(timer);
+         } else if (!currentRepo) {
+            // Connected but no repo selected
+            setShowRepoSelectionModal(true);
+         }
+      }
+   }, [isGithubLoading, githubUser, currentRepo]);
 
    // --- Hooks Initialization ---
    const {
@@ -64,321 +88,335 @@ const App: React.FC = () => {
    // I need to destructure carefully.
 
    return (
-      <div className="flex h-screen bg-slate-100 text-slate-800 font-sans overflow-hidden">
+      <div className="flex flex-col h-screen bg-slate-100 text-slate-800 font-sans overflow-hidden">
+         <div className="flex-1 flex overflow-hidden">
 
-         {persistence.isGeneratingWorld && <WorldGenerationOverlay status={persistence.generationStatus} />}
+            {persistence.isGeneratingWorld && <WorldGenerationOverlay status={persistence.generationStatus} />}
 
-         {/* Mobile Header */}
-         <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
-            <div className="flex items-center gap-2">
-               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-serif font-bold">E</div>
-               <span className="font-serif font-bold text-slate-800">EcoNarrative</span>
+            {/* Mobile Header */}
+            <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
+               <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-serif font-bold">E</div>
+                  <span className="font-serif font-bold text-slate-800">EcoNarrative</span>
+               </div>
+               <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
+                  {isMobileMenuOpen ? <X /> : <Menu />}
+               </button>
             </div>
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
-               {isMobileMenuOpen ? <X /> : <Menu />}
-            </button>
-         </div>
 
-         {/* Sidebar Navigation */}
-         <nav className={`
+            {/* Sidebar Navigation */}
+            <nav className={`
         fixed inset-y-0 left-0 z-40 bg-slate-900 text-slate-300 flex flex-col transition-all duration-300 transform 
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
         md:translate-x-0 md:static
         ${isMinimalUI ? 'w-20 items-center' : 'w-64'}
       `}>
-            <div className={`p-6 flex items-center ${isMinimalUI ? 'justify-center' : 'gap-3'} text-white transition-all`}>
-               <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-serif font-bold text-lg shadow-lg shadow-indigo-500/30 shrink-0">E</div>
-               {!isMinimalUI && (
-                  <div>
-                     <h1 className="font-serif font-bold text-lg tracking-wide whitespace-nowrap">EcoNarrative</h1>
-                     <p className="text-[10px] opacity-60 uppercase tracking-widest">Studio</p>
-                  </div>
-               )}
-            </div>
+               <div className={`p-6 flex items-center ${isMinimalUI ? 'justify-center' : 'gap-3'} text-white transition-all`}>
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-serif font-bold text-lg shadow-lg shadow-indigo-500/30 shrink-0">E</div>
+                  {!isMinimalUI && (
+                     <div>
+                        <h1 className="font-serif font-bold text-lg tracking-wide whitespace-nowrap">EcoNarrative</h1>
+                        <p className="text-[10px] opacity-60 uppercase tracking-widest">Studio</p>
+                     </div>
+                  )}
+               </div>
 
-            <div className={`px-4 py-2 ${isMinimalUI ? 'px-2' : ''}`}>
-               <button
-                  onClick={() => persistence.setShowNewWorldModal(true)}
-                  className={`
+               <div className={`px-4 py-2 ${isMinimalUI ? 'px-2' : ''}`}>
+                  <button
+                     onClick={() => persistence.setShowNewWorldModal(true)}
+                     className={`
                w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-indigo-900/50 transition-all hover:scale-[1.02]
                ${isMinimalUI ? 'p-3 rounded-2xl' : 'py-3 px-4'}
              `}
-                  title={isMinimalUI ? "新建世界" : undefined}
-               >
-                  <Sparkles className="w-4 h-4" />
-                  {!isMinimalUI && "新建世界"}
-               </button>
-            </div>
-
-            <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World)</p>}
-
-               <button
-                  onClick={() => { setActiveTab('participants'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'participants' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "社会解剖学" : undefined}
-               >
-                  <Network className="w-4 h-4" />
-                  {!isMinimalUI && "社会解剖学"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('timeline'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'timeline' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "时间轴视图" : undefined}
-               >
-                  <Activity className="w-4 h-4" />
-                  {!isMinimalUI && "时间轴视图"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('tech'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'tech' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "科技树" : undefined}
-               >
-                  <Cpu className="w-4 h-4" />
-                  {!isMinimalUI && "科技树"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('chronicle'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'chronicle' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "史书视图" : undefined}
-               >
-                  <BookText className="w-4 h-4" />
-                  {!isMinimalUI && "史书视图"}
-               </button>
-            </div>
-
-            <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事构建 (Story)</p>}
-
-               <button
-                  onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "头脑风暴" : undefined}
-               >
-                  <MessageCircle className="w-4 h-4" />
-                  {!isMinimalUI && "头脑风暴"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "人物卡管理" : undefined}
-               >
-                  <User className="w-4 h-4" />
-                  {!isMinimalUI && "人物卡管理"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('story'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'story' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "故事引擎" : undefined}
-               >
-                  <BookOpen className="w-4 h-4" />
-                  {!isMinimalUI && "故事引擎"}
-               </button>
-            </div>
-
-            <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">数据管理</p>}
-               <button
-                  onClick={() => { persistence.setShowSaveModal(true); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
-                  title={isMinimalUI ? "保存当前世界" : undefined}
-               >
-                  <Save className="w-4 h-4" />
-                  {!isMinimalUI && "保存当前世界"}
-               </button>
-               <button
-                  onClick={() => { persistence.handleLoadWorldList(); persistence.setShowLoadModal(true); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
-                  title={isMinimalUI ? "加载存档" : undefined}
-               >
-                  <FolderOpen className="w-4 h-4" />
-                  {!isMinimalUI && "加载存档"}
-               </button>
-            </div>
-
-            <div className={`p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
-               <button
-                  onClick={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
-                  className={`flex items-center gap-3 text-slate-400 hover:text-white transition-colors text-sm ${isMinimalUI ? 'justify-center' : ''}`}
-                  title={isMinimalUI ? "全局设置" : undefined}
-               >
-                  <Settings2 className="w-4 h-4" />
-                  {!isMinimalUI && "全局设置"}
-               </button>
-
-               <button
-                  onClick={toggleMinimalUI}
-                  className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800"
-                  title={isMinimalUI ? "展开侧边栏" : "折叠侧边栏"}
-               >
-                  {isMinimalUI ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-               </button>
-            </div>
-         </nav>
-
-         {/* Main Content */}
-         <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
-
-            {/* GLOBAL HEADER */}
-            <header className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
-               <div className="flex items-center gap-6">
-                  <div>
-                     <h2 className="text-lg font-serif font-bold text-slate-800">{persistence.worldName}</h2>
-                     <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <span>{worldModel.model.entities.length} 个实体</span>
-                        <span>•</span>
-                        <span>{worldModel.storySegments.length} 个章节</span>
-                     </div>
-                  </div>
+                     title={isMinimalUI ? "新建世界" : undefined}
+                  >
+                     <Sparkles className="w-4 h-4" />
+                     {!isMinimalUI && "新建世界"}
+                  </button>
                </div>
 
-               <div className="flex items-center gap-3">
+               <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
+                  {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World)</p>}
+
                   <button
-                     onClick={persistence.handleSaveWorld}
-                     disabled={persistence.isSaving}
-                     className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors"
-                     title="保存"
+                     onClick={() => { setActiveTab('participants'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'participants' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "社会解剖学" : undefined}
+                  >
+                     <Network className="w-4 h-4" />
+                     {!isMinimalUI && "社会解剖学"}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('timeline'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'timeline' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "时间轴视图" : undefined}
+                  >
+                     <Activity className="w-4 h-4" />
+                     {!isMinimalUI && "时间轴视图"}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('tech'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'tech' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "科技树" : undefined}
+                  >
+                     <Cpu className="w-4 h-4" />
+                     {!isMinimalUI && "科技树"}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('chronicle'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'chronicle' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "史书视图" : undefined}
+                  >
+                     <BookText className="w-4 h-4" />
+                     {!isMinimalUI && "史书视图"}
+                  </button>
+               </div>
+
+               <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
+                  {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事构建 (Story)</p>}
+
+                  <button
+                     onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "头脑风暴" : undefined}
+                  >
+                     <MessageCircle className="w-4 h-4" />
+                     {!isMinimalUI && "头脑风暴"}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "人物卡管理" : undefined}
+                  >
+                     <User className="w-4 h-4" />
+                     {!isMinimalUI && "人物卡管理"}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('story'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'story' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? "故事引擎" : undefined}
+                  >
+                     <BookOpen className="w-4 h-4" />
+                     {!isMinimalUI && "故事引擎"}
+                  </button>
+               </div>
+
+               <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
+                  {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">数据管理</p>}
+                  <button
+                     onClick={() => { persistence.setShowSaveModal(true); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
+                     title={isMinimalUI ? "保存当前世界" : undefined}
                   >
                      <Save className="w-4 h-4" />
+                     {!isMinimalUI && "保存当前世界"}
                   </button>
-                  <div className="h-6 w-px bg-slate-200"></div>
                   <button
-                     onClick={worldModel.handleGlobalSync}
-                     disabled={worldModel.isSyncing}
-                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
+                     onClick={() => { persistence.handleLoadWorldList(); persistence.setShowLoadModal(true); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
+                     title={isMinimalUI ? "加载存档" : undefined}
                   >
-                     {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                     <span>同步世界状态</span>
+                     <FolderOpen className="w-4 h-4" />
+                     {!isMinimalUI && "加载存档"}
                   </button>
                </div>
-            </header>
 
-            {/* View Container */}
-            <div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50">
-               {activeTab === 'participants' && (
-                  <ParticipantsView
-                     model={worldModel.model}
-                     framework={worldModel.currentFramework}
-                     onAddEntity={worldModel.handleAddEntity}
-                     onUpdateEntity={worldModel.handleUpdateEntity}
-                     onRemoveEntity={worldModel.handleRemoveEntity}
-                     onGenerateLayer={worldModel.handleGenerateLayer}
-                     onAddRelationship={worldModel.handleAddRelationship}
-                     onRemoveRelationship={worldModel.handleRemoveRelationship}
-                     onAddEntityState={worldModel.handleAddEntityState}
-                     onUpdateEntityState={worldModel.handleUpdateEntityState}
-                     onRemoveEntityState={worldModel.handleRemoveEntityState}
-                     loadingLayerId={worldModel.loadingLayer}
-                     isMinimalUI={isMinimalUI}
-                  />
-               )}
+               <div className={`p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
+                  <button
+                     onClick={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
+                     className={`flex items-center gap-3 text-slate-400 hover:text-white transition-colors text-sm ${isMinimalUI ? 'justify-center' : ''}`}
+                     title={isMinimalUI ? "全局设置" : undefined}
+                  >
+                     <Settings2 className="w-4 h-4" />
+                     {!isMinimalUI && "全局设置"}
+                  </button>
 
-               {
-                  activeTab === 'timeline' && (
-                     <TimelineView
+                  <button
+                     onClick={toggleMinimalUI}
+                     className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800"
+                     title={isMinimalUI ? "展开侧边栏" : "折叠侧边栏"}
+                  >
+                     {isMinimalUI ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                  </button>
+               </div>
+            </nav>
+
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
+
+               {/* GLOBAL HEADER */}
+               <header className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">
+                  <div className="flex items-center gap-6">
+                     <div>
+                        <h2 className="text-lg font-serif font-bold text-slate-800">{persistence.worldName}</h2>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                           <span>{worldModel.model.entities.length} 个实体</span>
+                           <span>•</span>
+                           <span>{worldModel.storySegments.length} 个章节</span>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                     <button
+                        onClick={persistence.handleSaveWorld}
+                        disabled={persistence.isSaving}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+                        title="保存"
+                     >
+                        <Save className="w-4 h-4" />
+                     </button>
+                     <div className="h-6 w-px bg-slate-200"></div>
+                     <button
+                        onClick={worldModel.handleGlobalSync}
+                        disabled={worldModel.isSyncing}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
+                     >
+                        {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        <span>同步世界状态</span>
+                     </button>
+                  </div>
+               </header>
+
+               {/* View Container */}
+               <div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50">
+                  {activeTab === 'participants' && (
+                     <ParticipantsView
                         model={worldModel.model}
-                        storySegments={worldModel.storySegments}
                         framework={worldModel.currentFramework}
-                     />
-                  )
-               }
-
-               {
-                  activeTab === 'tech' && (
-                     <TechTreeView
-                        technologies={worldModel.model.technologies || []}
-                        dependencies={worldModel.model.techDependencies || []}
-                        onAddNode={worldModel.handleAddTechNode}
-                        onUpdateNode={worldModel.handleUpdateTechNode}
-                        onRemoveNode={worldModel.handleRemoveTechNode}
-                        onAddDependency={worldModel.handleAddTechDependency}
-                        onRemoveDependency={worldModel.handleRemoveTechDependency}
-                        onGenerateRelatedNode={worldModel.handleGenerateRelatedTech}
-                        onManualCreateAndLink={worldModel.handleAddTechNodeWithLink}
-                        onUpdateNodeLayout={worldModel.handleUpdateTechNodeLayout}
-                        generatingNodeId={worldModel.generatingTechId}
-                     />
-                  )
-               }
-
-               {
-                  activeTab === 'chronicle' && (
-                     <ChronicleView
-                        model={worldModel.model}
-                        storySegments={worldModel.storySegments}
-                        context={worldModel.worldContext}
-                        chronicleText={worldModel.chronicleText}
-                        setChronicleText={worldModel.setChronicleText}
-                        isSyncing={worldModel.isSyncing}
-                     />
-                  )
-               }
-               {
-                  activeTab === 'characters' && (
-                     <CharacterCardView
-                        entities={worldModel.model.entities}
-                        settings={apiSettings}
                         onAddEntity={worldModel.handleAddEntity}
                         onUpdateEntity={worldModel.handleUpdateEntity}
                         onRemoveEntity={worldModel.handleRemoveEntity}
+                        onGenerateLayer={worldModel.handleGenerateLayer}
+                        onAddRelationship={worldModel.handleAddRelationship}
+                        onRemoveRelationship={worldModel.handleRemoveRelationship}
+                        onAddEntityState={worldModel.handleAddEntityState}
+                        onUpdateEntityState={worldModel.handleUpdateEntityState}
+                        onRemoveEntityState={worldModel.handleRemoveEntityState}
+                        loadingLayerId={worldModel.loadingLayer}
+                        isMinimalUI={isMinimalUI}
                      />
-                  )
-               }
+                  )}
 
-               {
-                  activeTab === 'story' && (
-                     <StoryAgentView
-                        agents={storyEngine.agents}
-                        workflow={storyEngine.workflow}
-                        model={worldModel.model}
-                        framework={worldModel.currentFramework}
-                        worldContext={worldModel.worldContext}
-                        storySegments={worldModel.storySegments}
-                        settings={apiSettings}
-                        currentTimeSetting={worldModel.currentTimeSetting}
-                        onUpdateAgents={storyEngine.setAgents}
-                        onUpdateWorkflow={storyEngine.setWorkflow}
-                        onAddStorySegment={worldModel.handleAddStorySegment}
-                        onUpdateStorySegment={worldModel.handleUpdateStorySegment}
-                        onRemoveStorySegment={worldModel.handleRemoveStorySegment}
+                  {
+                     activeTab === 'timeline' && (
+                        <TimelineView
+                           model={worldModel.model}
+                           storySegments={worldModel.storySegments}
+                           framework={worldModel.currentFramework}
+                        />
+                     )
+                  }
 
-                        // Lifted State Methods
-                        storyGuidance={storyEngine.storyGuidance}
-                        onUpdateStoryGuidance={storyEngine.setStoryGuidance}
-                        workflowStatus={storyEngine.workflowStatus}
-                        onUpdateWorkflowStatus={storyEngine.setWorkflowStatus}
-                        currentStepIndex={storyEngine.currentStepIndex}
-                        onUpdateCurrentStepIndex={storyEngine.setCurrentStepIndex}
-                        executionLogs={storyEngine.executionLogs}
-                        onUpdateExecutionLogs={storyEngine.setExecutionLogs}
-                        stepOutputs={storyEngine.stepOutputs}
-                        onUpdateStepOutputs={storyEngine.setStepOutputs}
-                        generatedDraft={storyEngine.generatedDraft}
-                        onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
-                        artifacts={storyEngine.artifacts}
-                        onUpdateArtifacts={storyEngine.setArtifacts}
-                     />
-                  )
-               }
+                  {
+                     activeTab === 'tech' && (
+                        <TechTreeView
+                           technologies={worldModel.model.technologies || []}
+                           dependencies={worldModel.model.techDependencies || []}
+                           onAddNode={worldModel.handleAddTechNode}
+                           onUpdateNode={worldModel.handleUpdateTechNode}
+                           onRemoveNode={worldModel.handleRemoveTechNode}
+                           onAddDependency={worldModel.handleAddTechDependency}
+                           onRemoveDependency={worldModel.handleRemoveTechDependency}
+                           onGenerateRelatedNode={worldModel.handleGenerateRelatedTech}
+                           onManualCreateAndLink={worldModel.handleAddTechNodeWithLink}
+                           onUpdateNodeLayout={worldModel.handleUpdateTechNodeLayout}
+                           generatingNodeId={worldModel.generatingTechId}
+                        />
+                     )
+                  }
 
-               {
-                  activeTab === 'brainstorm' && (
-                     <BrainstormView globalApiSettings={apiSettings} />
-                  )
-               }
-            </div >
-         </main >
+                  {
+                     activeTab === 'chronicle' && (
+                        <ChronicleView
+                           model={worldModel.model}
+                           storySegments={worldModel.storySegments}
+                           context={worldModel.worldContext}
+                           chronicleText={worldModel.chronicleText}
+                           setChronicleText={worldModel.setChronicleText}
+                           isSyncing={worldModel.isSyncing}
+                        />
+                     )
+                  }
+                  {
+                     activeTab === 'characters' && (
+                        <CharacterCardView
+                           entities={worldModel.model.entities}
+                           settings={apiSettings}
+                           onAddEntity={worldModel.handleAddEntity}
+                           onUpdateEntity={worldModel.handleUpdateEntity}
+                           onRemoveEntity={worldModel.handleRemoveEntity}
+                        />
+                     )
+                  }
+
+                  {
+                     activeTab === 'story' && (
+                        <StoryAgentView
+                           agents={storyEngine.agents}
+                           workflow={storyEngine.workflow}
+                           model={worldModel.model}
+                           framework={worldModel.currentFramework}
+                           worldContext={worldModel.worldContext}
+                           storySegments={worldModel.storySegments}
+                           settings={apiSettings}
+                           currentTimeSetting={worldModel.currentTimeSetting}
+                           onUpdateAgents={storyEngine.setAgents}
+                           onUpdateWorkflow={storyEngine.setWorkflow}
+                           onAddStorySegment={worldModel.handleAddStorySegment}
+                           onUpdateStorySegment={worldModel.handleUpdateStorySegment}
+                           onRemoveStorySegment={worldModel.handleRemoveStorySegment}
+
+                           // Lifted State Methods
+                           storyGuidance={storyEngine.storyGuidance}
+                           onUpdateStoryGuidance={storyEngine.setStoryGuidance}
+                           workflowStatus={storyEngine.workflowStatus}
+                           onUpdateWorkflowStatus={storyEngine.setWorkflowStatus}
+                           currentStepIndex={storyEngine.currentStepIndex}
+                           onUpdateCurrentStepIndex={storyEngine.setCurrentStepIndex}
+                           executionLogs={storyEngine.executionLogs}
+                           onUpdateExecutionLogs={storyEngine.setExecutionLogs}
+                           stepOutputs={storyEngine.stepOutputs}
+                           onUpdateStepOutputs={storyEngine.setStepOutputs}
+                           generatedDraft={storyEngine.generatedDraft}
+                           onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
+                           artifacts={storyEngine.artifacts}
+                           onUpdateArtifacts={storyEngine.setArtifacts}
+                        />
+                     )
+                  }
+
+                  {
+                     activeTab === 'brainstorm' && (
+                        <BrainstormView globalApiSettings={apiSettings} />
+                     )
+                  }
+               </div>
+            </main>
+         </div>
+
+         <StatusBar />
 
          <SettingsModal
             isOpen={showSettingsModal}
             onClose={() => setShowSettingsModal(false)}
             settings={apiSettings}
             onSave={handleSaveSettings}
+         />
+
+         <GitHubConnectModal
+            isOpen={showGitHubConnectModal}
+            onClose={() => setShowGitHubConnectModal(false)}
+         />
+
+         <RepoSelectionModal
+            isOpen={showRepoSelectionModal}
+            onClose={() => setShowRepoSelectionModal(false)}
          />
 
          {

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
+import { useGitHub } from '../components/GitHubContext';
+import { GitHubService } from '../services/GitHubService';
+import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
 import { UseWorldModelReturn } from './useWorldModel';
 import { UseStoryEngineReturn } from './useStoryEngine';
@@ -24,6 +27,15 @@ export const usePersistence = ({
     setActiveTab
 }: UsePersistenceProps) => {
     const queryClient = useQueryClient();
+    const { octokit, user: githubUser, currentRepo } = useGitHub();
+
+    const githubService = useMemo(() => {
+        const service = octokit ? new GitHubService(octokit) : null;
+        if (service && currentRepo) {
+            service.setRepo(currentRepo);
+        }
+        return service;
+    }, [octokit, currentRepo]);
 
     // Persistence State
     const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
@@ -69,7 +81,27 @@ export const usePersistence = ({
                 agents: storyEngine.agents,
                 workflow: storyEngine.workflow,
                 artifacts: storyEngine.artifacts
+
             };
+
+            // Save to GitHub if connected
+            if (githubService && githubUser) {
+                try {
+                    console.log("Saving to GitHub...");
+                    await githubService.saveFile({
+                        path: `worlds/${worldName.replace(/\s+/g, '_')}.json`,
+                        content: JSON.stringify(worldData, null, 2),
+                        message: `Save world: ${worldName}`,
+                        branch: 'main' // Default to main for now
+                    });
+                    console.log("Saved to GitHub");
+                } catch (err) {
+                    console.error("Failed to save to GitHub:", err);
+                    // Don't block firebase save if github fails, but maybe notify user?
+                    // For now continuing.
+                }
+            }
+
             return await saveWorld(worldData);
         },
         onSuccess: (savedId) => {
