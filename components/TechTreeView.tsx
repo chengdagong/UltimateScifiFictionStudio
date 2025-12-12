@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as d3Import from 'd3';
 import { TechNode, TechDependency } from '../types';
 import { Cpu, Plus, Trash2, X, Edit, Link, Sparkles, PenTool } from 'lucide-react';
@@ -31,6 +32,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
    onAddNode, onUpdateNode, onRemoveNode, onAddDependency, onRemoveDependency,
    onGenerateRelatedNode, onManualCreateAndLink, onUpdateNodeLayout, generatingNodeId
 }) => {
+   const { t } = useTranslation();
    const svgRef = useRef<SVGSVGElement>(null);
    const containerRef = useRef<HTMLDivElement>(null);
 
@@ -418,7 +420,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
       const eraIndex = Math.floor(worldX / ERA_WIDTH);
 
       // Get Era Name (or default if out of bounds)
-      const era = graphData.eras[eraIndex] || (eraIndex >= graphData.eras.length ? "New Era" : graphData.eras[0]);
+      const era = graphData.eras[eraIndex] || (eraIndex >= graphData.eras.length ? t('tech_new_era') : graphData.eras[0]);
 
       setContextMenu({
          x: e.clientX,
@@ -432,8 +434,8 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
       if (!selectedNode) return (
          <div className="p-6 text-center text-slate-400">
             <Cpu className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>选择一个科技节点查看详情</p>
-            <p className="text-xs mt-2">点击画布空白处取消选择</p>
+            <p>{t('tech_detail_select_hint')}</p>
+            <p className="text-xs mt-2">{t('tech_detail_deselect_hint')}</p>
          </div>
       );
 
@@ -448,7 +450,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
             </div>
 
             <div className="space-y-2">
-               <label className="text-xs font-bold text-slate-500 uppercase">基本信息</label>
+               <label className="text-xs font-bold text-slate-500 uppercase">{t('tech_detail_basic_info')}</label>
                <input
                   className="w-full p-2 border rounded text-sm mb-1"
                   value={selectedNode.name}
@@ -463,7 +465,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
 
             <div className="grid grid-cols-2 gap-2">
                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">时代 (Era)</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase">{t('tech_detail_era')}</label>
                   <input
                      className="w-full p-2 border rounded text-sm"
                      value={selectedNode.era}
@@ -471,21 +473,21 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                   />
                </div>
                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase">类型</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase">{t('tech_detail_type')}</label>
                   <select
                      className="w-full p-2 border rounded text-sm bg-white"
                      value={selectedNode.type}
                      onChange={e => onUpdateNode(selectedNode.id, selectedNode.name, selectedNode.description, selectedNode.era, e.target.value as any, selectedNode.status)}
                   >
-                     <option value="civil">民用 (Civil)</option>
-                     <option value="military">军事 (Military)</option>
-                     <option value="abstract">理论 (Abstract)</option>
+                     <option value="civil">{t('tech_type_civil')}</option>
+                     <option value="military">{t('tech_type_military')}</option>
+                     <option value="abstract">{t('tech_type_abstract')}</option>
                   </select>
                </div>
             </div>
 
             <div>
-               <label className="text-xs font-bold text-slate-500 uppercase">研发状态</label>
+               <label className="text-xs font-bold text-slate-500 uppercase">{t('tech_detail_status')}</label>
                <div className="flex gap-1 mt-1">
                   {['concept', 'prototype', 'production', 'obsolete'].map((s: any) => (
                      <button
@@ -501,12 +503,12 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
 
             <div className="pt-4 border-t border-slate-100">
                <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-2">
-                  <Link className="w-3 h-3" /> 依赖关系
+                  <Link className="w-3 h-3" /> {t('tech_detail_dependencies')}
                </label>
 
                <div className="space-y-2 text-sm">
                   <div className="flex gap-2 items-center text-slate-600">
-                     <span className="text-xs bg-slate-100 px-1 rounded">前置</span>
+                     <span className="text-xs bg-slate-100 px-1 rounded">{t('tech_dep_source')}</span>
                      <div className="flex-1 flex flex-wrap gap-1">
                         {relatedSources.map(t => (
                            <span key={t?.id} className="bg-slate-50 border px-1 rounded flex items-center gap-1">
@@ -524,14 +526,14 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                            }}
                            value=""
                         >
-                           <option value="">+ 添加</option>
+                           <option value="">{t('tech_add_dep')}</option>
                            {technologies.filter(t => t.id !== selectedNode.id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                      </div>
                   </div>
 
                   <div className="flex gap-2 items-center text-slate-600">
-                     <span className="text-xs bg-slate-100 px-1 rounded">解锁</span>
+                     <span className="text-xs bg-slate-100 px-1 rounded">{t('tech_dep_target')}</span>
                      <div className="flex-1 flex flex-wrap gap-1">
                         {relatedTargets.map(t => (
                            <span key={t?.id} className="bg-slate-50 border px-1 rounded flex items-center gap-1">
@@ -549,7 +551,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                            }}
                            value=""
                         >
-                           <option value="">+ 添加</option>
+                           <option value="">{t('tech_add_dep')}</option>
                            {technologies.filter(t => t.id !== selectedNode.id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                      </div>
@@ -567,17 +569,17 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                <div>
                   <h2 className="text-xl font-serif font-bold text-slate-800 flex items-center gap-2">
-                     <Cpu className="w-5 h-5 text-indigo-700" /> 科技树 (Tech Tree)
+                     <Cpu className="w-5 h-5 text-indigo-700" /> {t('tech_title')}
                   </h2>
                   <p className="text-xs text-slate-500 mt-1">
-                     管理技术发展脉络与依赖关系。X轴表示时代演进。
+                     {t('tech_subtitle')}
                   </p>
                </div>
                <button
                   onClick={() => { setIsAdding(!isAdding); setManualLinkContext(null); setNewName(""); }}
                   className={`flex items-center gap-1 px-3 py-2 rounded-lg font-bold text-sm transition-colors ${isAdding ? 'bg-slate-200 text-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                >
-                  <Plus className="w-4 h-4" /> 新技术
+                  <Plus className="w-4 h-4" /> {t('tech_new_btn')}
                </button>
             </div>
 
@@ -587,7 +589,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                   <div className="bg-white rounded-xl shadow-2xl p-6 w-[400px] transform transition-all scale-100" onClick={e => e.stopPropagation()}>
                      <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-slate-800">
-                           {linkChoiceContext.direction === 'dependency' ? '添加前置技术' : '添加后续技术'}
+                           {linkChoiceContext.direction === 'dependency' ? t('tech_add_prev') : t('tech_add_next')}
                         </h3>
                         <button onClick={() => setLinkChoiceContext(null)} className="text-slate-400 hover:text-slate-600">
                            <X className="w-5 h-5" />
@@ -602,8 +604,8 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                            <div className="p-3 bg-indigo-100 text-indigo-600 rounded-full group-hover:scale-110 transition-transform">
                               <Sparkles className="w-6 h-6" />
                            </div>
-                           <span className="font-bold text-slate-700">AI 生成</span>
-                           <span className="text-xs text-slate-500 text-center">基于当前技术智能生成</span>
+                           <span className="font-bold text-slate-700">{t('action_ai_generate')}</span>
+                           <span className="text-xs text-slate-500 text-center">{t('tech_ai_gen_desc')}</span>
                         </button>
 
                         <button
@@ -613,8 +615,8 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                            <div className="p-3 bg-slate-100 text-slate-600 rounded-full group-hover:scale-110 transition-transform">
                               <PenTool className="w-6 h-6" />
                            </div>
-                           <span className="font-bold text-slate-700">手动创建</span>
-                           <span className="text-xs text-slate-500 text-center">手动输入详细信息</span>
+                           <span className="font-bold text-slate-700">{t('tech_manual_create')}</span>
+                           <span className="text-xs text-slate-500 text-center">{t('tech_manual_desc')}</span>
                         </button>
                      </div>
                   </div>
@@ -624,19 +626,19 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
             {isAdding && (
                <div className="absolute top-20 left-6 z-10 w-64 bg-white p-4 rounded-xl shadow-xl border border-indigo-100 animate-fadeIn">
                   <h3 className="font-bold text-sm mb-3">
-                     {manualLinkContext ? (manualLinkContext.direction === 'dependency' ? '添加前置技术节点' : '添加后续技术节点') : '添加新技术节点'}
+                     {manualLinkContext ? (manualLinkContext.direction === 'dependency' ? t('tech_add_node_title_prev') : t('tech_add_node_title_next')) : t('tech_add_node_title_new')}
                   </h3>
-                  <input className="w-full mb-2 p-2 border rounded text-xs" placeholder="技术名称..." value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
-                  <input className="w-full mb-2 p-2 border rounded text-xs" placeholder="时代 (e.g. 2020s)..." value={newEra} onChange={e => setNewEra(e.target.value)} />
+                  <input className="w-full mb-2 p-2 border rounded text-xs" placeholder={t('tech_placeholder_name')} value={newName} onChange={e => setNewName(e.target.value)} autoFocus />
+                  <input className="w-full mb-2 p-2 border rounded text-xs" placeholder={t('tech_placeholder_era')} value={newEra} onChange={e => setNewEra(e.target.value)} />
                   <select className="w-full mb-2 p-2 border rounded text-xs bg-white" value={newType} onChange={e => setNewType(e.target.value as any)}>
-                     <option value="civil">民用</option>
-                     <option value="military">军事</option>
-                     <option value="abstract">理论</option>
+                     <option value="civil">{t('tech_type_civil_short')}</option>
+                     <option value="military">{t('tech_type_military_short')}</option>
+                     <option value="abstract">{t('tech_type_abstract_short')}</option>
                   </select>
-                  <textarea className="w-full mb-2 p-2 border rounded text-xs h-16" placeholder="描述..." value={newDesc} onChange={e => setNewDesc(e.target.value)} />
+                  <textarea className="w-full mb-2 p-2 border rounded text-xs h-16" placeholder={t('new_entity_default_desc')} value={newDesc} onChange={e => setNewDesc(e.target.value)} />
                   <div className="flex justify-end gap-2">
-                     <button onClick={() => { setIsAdding(false); setManualLinkContext(null); }} className="px-2 py-1 text-xs text-slate-500">取消</button>
-                     <button onClick={handleCreate} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded">确认</button>
+                     <button onClick={() => { setIsAdding(false); setManualLinkContext(null); }} className="px-2 py-1 text-xs text-slate-500">{t('action_cancel')}</button>
+                     <button onClick={handleCreate} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded">{t('action_confirm')}</button>
                   </div>
                </div>
             )}
@@ -649,7 +651,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                   onClick={(e) => e.stopPropagation()}
                >
                   <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
-                     在 {contextMenu.era} 创建
+                     {t('tech_ctx_create_in', { era: contextMenu.era })}
                   </div>
                   <button
                      onClick={() => {
@@ -659,7 +661,7 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                      }}
                      className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded text-left"
                   >
-                     <Plus className="w-4 h-4" /> 创建新节点
+                     <Plus className="w-4 h-4" /> {t('tech_ctx_create_node')}
                   </button>
                </div>
             )}
@@ -675,8 +677,8 @@ const TechTreeView: React.FC<TechTreeViewProps> = ({
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                      <div className="text-center text-slate-400">
                         <Cpu className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                        <p>暂无科技数据</p>
-                        <p className="text-xs">点击右上角添加，或使用预设剧本生成</p>
+                        <p>{t('tech_empty_title')}</p>
+                        <p className="text-xs">{t('tech_empty_desc')}</p>
                      </div>
                   </div>
                )}

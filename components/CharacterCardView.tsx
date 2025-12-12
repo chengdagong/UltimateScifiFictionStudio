@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User, Plus, Trash2, Edit2, Sparkles, Loader2, Save, X, Calendar, FileText } from 'lucide-react'; // Using User icon for Person
 import { SocialEntity, EntityCategory, ApiSettings } from '../types';
 import { generateCharacterProfile } from '../services/geminiService';
@@ -19,6 +20,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
     onUpdateEntity,
     onRemoveEntity
 }) => {
+    const { t } = useTranslation();
     // Filter only PEOPLE
     const characters = entities.filter(e => e.category === EntityCategory.PERSON);
 
@@ -40,7 +42,9 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
     };
 
     const handleCreateNew = () => {
-        const newId = onAddEntity("新人物", "暂无描述", EntityCategory.PERSON);
+        const defaultName = t('char_new_default_name');
+        const defaultDesc = t('char_new_default_desc');
+        const newId = onAddEntity(defaultName, defaultDesc, EntityCategory.PERSON);
         // Find the new entity object to set it as selected
         // Since onAddEntity doesn't return the full object, just ID, and parent state update might be async, 
         // we might not find it immediately. But typically React state updates trigger re-render.
@@ -48,7 +52,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
         setSelectedCharId(newId);
         setIsEditing(true);
         // Mock the form state until re-render
-        setEditForm({ id: newId, name: "新人物", description: "暂无描述", category: EntityCategory.PERSON });
+        setEditForm({ id: newId, name: defaultName, description: defaultDesc, category: EntityCategory.PERSON });
     };
 
     const handleSave = () => {
@@ -66,8 +70,8 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
     };
 
     const handleGenerate = async () => {
-        if (!settings.apiKey) return alert("请先配置 API Key");
-        if (!genPrompt.trim()) return alert("请输入人物描述");
+        if (!settings.apiKey) return alert(t('char_alert_api_key'));
+        if (!genPrompt.trim()) return alert(t('char_alert_prompt'));
 
         setIsGenerating(true);
         try {
@@ -83,7 +87,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
             setShowGenModal(false);
             setGenPrompt("");
         } catch (e: any) {
-            alert("生成失败: " + e.message);
+            alert(t('char_alert_gen_fail') + ": " + e.message);
         } finally {
             setIsGenerating(false);
         }
@@ -99,21 +103,21 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
                     <h2 className="font-bold text-slate-800 flex items-center gap-2">
                         <User className="w-5 h-5 text-indigo-600" />
-                        人物名册
+                        {t('char_list_title')}
                         <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{characters.length}</span>
                     </h2>
                     <div className="flex gap-1">
                         <button
                             onClick={() => setShowGenModal(true)}
                             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="AI 生成人物"
+                            title={t('char_btn_ai_gen')}
                         >
                             <Sparkles className="w-4 h-4" />
                         </button>
                         <button
                             onClick={handleCreateNew}
                             className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            title="手动新建"
+                            title={t('char_btn_manual')}
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -142,8 +146,8 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                     ))}
                     {characters.length === 0 && (
                         <div className="text-center py-10 text-slate-400 text-sm">
-                            <p>暂无人物</p>
-                            <p className="text-xs mt-1">点击右上角 + 创建</p>
+                            <p>{t('char_empty_list')}</p>
+                            <p className="text-xs mt-1">{t('char_empty_help')}</p>
                         </div>
                     )}
                 </div>
@@ -161,7 +165,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                                         className="text-xl font-bold text-slate-800 border-b border-indigo-300 focus:outline-none focus:border-indigo-600 bg-transparent px-1 placeholder:text-slate-300"
                                         value={editForm.name || ""}
                                         onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                                        placeholder="人物姓名"
+                                        placeholder={t('char_placeholder_name')}
                                     />
                                 ) : (
                                     <h1 className="text-2xl font-serif font-bold text-slate-800">{selectedChar?.name}</h1>
@@ -171,25 +175,25 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                             <div className="flex gap-2">
                                 {isEditing ? (
                                     <>
-                                        <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 text-sm font-bold hover:text-slate-700">取消</button>
+                                        <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 text-sm font-bold hover:text-slate-700">{t('action_cancel')}</button>
                                         <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-indigo-700 flex items-center gap-2">
-                                            <Save className="w-4 h-4" /> 保存
+                                            <Save className="w-4 h-4" /> {t('action_save')}
                                         </button>
                                     </>
                                 ) : (
                                     <>
-                                        <button onClick={() => { setIsEditing(true); setEditForm(selectedChar!); }} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="编辑">
+                                        <button onClick={() => { setIsEditing(true); setEditForm(selectedChar!); }} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title={t('action_edit')}>
                                             <Edit2 className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (window.confirm(`确定要删除 ${selectedChar?.name} 吗?`)) {
+                                                if (window.confirm(t('char_confirm_delete', { name: selectedChar?.name }))) {
                                                     onRemoveEntity(selectedChar!.id);
                                                     setSelectedCharId(null);
                                                 }
                                             }}
                                             className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="删除"
+                                            title={t('action_delete')}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -203,30 +207,30 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 max-w-3xl mx-auto">
                                 <div className="flex items-center gap-2 mb-4">
                                     <Calendar className="w-4 h-4 text-slate-400" />
-                                    <span className="text-xs font-bold text-slate-400 uppercase">活跃时期</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase">{t('char_label_active_period')}</span>
                                     {isEditing ? (
                                         <input
                                             className="text-sm border-b border-slate-200 focus:border-indigo-500 outline-none text-slate-600 w-32"
                                             value={editForm.validFrom || ""}
                                             onChange={e => setEditForm(prev => ({ ...prev, validFrom: e.target.value }))}
-                                            placeholder="例如：第一章"
+                                            placeholder={t('char_placeholder_period')}
                                         />
                                     ) : (
-                                        <span className="text-sm text-slate-600">{selectedChar?.validFrom || "未知"}</span>
+                                        <span className="text-sm text-slate-600">{selectedChar?.validFrom || t('char_period_unknown')}</span>
                                     )}
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-2">
                                         <FileText className="w-4 h-4 text-slate-400" />
-                                        <span className="text-xs font-bold text-slate-400 uppercase">人物小传</span>
+                                        <span className="text-xs font-bold text-slate-400 uppercase">{t('char_label_bio')}</span>
                                     </div>
                                     {isEditing ? (
                                         <textarea
                                             className="w-full h-96 p-4 border border-slate-200 rounded-lg text-slate-700 leading-relaxed focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none resize-none"
                                             value={editForm.description || ""}
                                             onChange={e => setEditForm(prev => ({ ...prev, description: e.target.value }))}
-                                            placeholder="输入人物背景故事、性格特征、外貌描写..."
+                                            placeholder={t('char_placeholder_bio')}
                                         />
                                     ) : (
                                         <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap">
@@ -242,7 +246,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                         <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                             <User className="w-10 h-10 text-slate-300" />
                         </div>
-                        <p>选择一个人物查看详情</p>
+                        <p>{t('char_select_hint')}</p>
                     </div>
                 )}
             </div>
@@ -254,16 +258,16 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                             <h3 className="font-bold text-slate-800 flex items-center gap-2">
                                 <Sparkles className="w-4 h-4 text-indigo-600" />
-                                AI 生成人物
+                                {t('char_btn_ai_gen')}
                             </h3>
                             <button onClick={() => setShowGenModal(false)}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>
                         </div>
                         <div className="p-4 space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">简单描述或原型 (Prompt)</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t('char_gen_label_prompt')}</label>
                                 <textarea
                                     className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-100 outline-none h-32 resize-none"
-                                    placeholder="例如：一个有着机械义眼的赛博朋克侦探，性格冷漠但正义，喜欢在雨夜出没..."
+                                    placeholder={t('char_gen_placeholder')}
                                     value={genPrompt}
                                     onChange={e => setGenPrompt(e.target.value)}
                                 />
@@ -276,7 +280,7 @@ const CharacterCardView: React.FC<CharacterCardViewProps> = ({
                                 `}
                             >
                                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                {isGenerating ? "正在构建人物..." : "生成"}
+                                {isGenerating ? t('char_gen_status_running') : t('action_generate')}
                             </button>
                         </div>
                     </div>

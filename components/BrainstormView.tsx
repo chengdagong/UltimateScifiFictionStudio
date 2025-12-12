@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Send, Plus, MessageSquare, Trash2, Settings2,
     Bot, User, Sparkles, MoreVertical, X, Save
@@ -23,7 +24,8 @@ const DEFAULT_CONFIG: BrainstormConfig = {
 };
 
 const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) => {
-    // State
+    const { t } = useTranslation();
+    // state
     const [sessions, setSessions] = useState<BrainstormSession[]>(() => {
         const saved = localStorage.getItem('ecoNarrative_brainstorm_sessions');
         return saved ? JSON.parse(saved) : [];
@@ -71,7 +73,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
     const handleNewSession = () => {
         const newSession: BrainstormSession = {
             id: crypto.randomUUID(),
-            name: `New Session ${sessions.length + 1}`,
+            name: `${t('brainstorm_new_session')} ${sessions.length + 1}`,
             messages: [],
             config: {
                 ...DEFAULT_CONFIG,
@@ -91,7 +93,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
 
     const handleDeleteSession = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (window.confirm("确定删除这个会话吗？")) {
+        if (window.confirm(t('brainstorm_confirm_delete'))) {
             setSessions(prev => prev.filter(s => s.id !== id));
             if (activeSessionId === id) {
                 setActiveSessionId(sessions.find(s => s.id !== id)?.id || null);
@@ -146,7 +148,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
             } : s));
 
         } catch (error: any) {
-            alert("发送失败: " + error.message);
+            alert(`${t('brainstorm_send_fail')}: ` + error.message);
             // Optional: Restore input?
             setInput(currentInput);
         } finally {
@@ -178,7 +180,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                 bg-slate-50 flex flex-col transition-all duration-300 shrink-0 overflow-hidden
             `}>
                 <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-700">会话列表</h3>
+                    <h3 className="font-bold text-slate-700">{t('brainstorm_session_list')}</h3>
                     <button onClick={handleNewSession} className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors">
                         <Plus className="w-4 h-4" />
                     </button>
@@ -248,7 +250,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                     {activeSession.messages.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4">
                             <Sparkles className="w-12 h-12" />
-                            <p>开始你的头脑风暴吧...</p>
+                            <p>{t('brainstorm_start_prompt')}</p>
                         </div>
                     )}
 
@@ -298,7 +300,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                                     handleSendMessage();
                                 }
                             }}
-                            placeholder="输入消息..."
+                            placeholder={t('brainstorm_placeholder')}
                             className="w-full bg-transparent border-none focus:ring-0 resize-none max-h-32 text-sm p-2"
                             rows={1}
                             style={{ minHeight: '40px' }}
@@ -318,13 +320,13 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
             {showConfig && (
                 <div className="w-72 border-l border-slate-200 bg-slate-50 flex flex-col overflow-y-auto shrink-0 animate-in slide-in-from-right duration-300">
                     <div className="p-4 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
-                        <span>参数设置</span>
+                        <span>{t('brainstorm_settings_title')}</span>
                         <button onClick={() => setShowConfig(false)}><X className="w-4 h-4 text-slate-400" /></button>
                     </div>
 
                     <div className="p-4 space-y-6">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Model</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase">{t('brainstorm_model')}</label>
                             <input
                                 className="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"
                                 value={activeSession.config.model}
@@ -335,7 +337,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
 
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
-                                <span>Temperature</span>
+                                <span>{t('brainstorm_temp')}</span>
                                 <span>{activeSession.config.temperature}</span>
                             </label>
                             <input
@@ -348,7 +350,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase">System Prompt</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase">{t('brainstorm_system_prompt')}</label>
                             <textarea
                                 className="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none min-h-[100px]"
                                 value={activeSession.config.systemInstruction || ""}
@@ -358,7 +360,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Provider</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase">{t('brainstorm_provider')}</label>
                             <select
                                 className="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"
                                 value={activeSession.config.provider}
@@ -370,7 +372,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase">API Key (Optional Override)</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase">{t('brainstorm_api_key_override')}</label>
                             <input
                                 type="password"
                                 className="w-full p-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"

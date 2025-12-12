@@ -222,7 +222,7 @@ const App: React.FC = () => {
                <button
                   onClick={toggleLanguage}
                   className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 flex items-center gap-2"
-                  title={i18n.language === 'zh' ? 'Switch to English' : '切换到中文'}
+                  title={i18n.language === 'zh' ? t('action_switch_to_en') : t('action_switch_to_zh')}
                >
                   <Globe2 className="w-4 h-4" />
                   {!isMinimalUI && <span className="text-xs font-bold uppercase">{i18n.language}</span>}
@@ -403,7 +403,7 @@ const App: React.FC = () => {
                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                   <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                      <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-                        <h2 className="text-xl font-bold text-slate-800">构建新世界</h2>
+                        <h2 className="text-xl font-bold text-slate-800">{t('modal_new_world_title')}</h2>
                         <button onClick={() => persistence.setShowNewWorldModal(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
                      </div>
 
@@ -412,19 +412,19 @@ const App: React.FC = () => {
                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${newWorldTab === 'empty' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
                            onClick={() => setNewWorldTab('empty')}
                         >
-                           创建空白世界
+                           {t('tab_new_world_empty')}
                         </button>
                         <button
                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${newWorldTab === 'presets' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
                            onClick={() => setNewWorldTab('presets')}
                         >
-                           预设剧本 (Presets)
+                           {t('tab_new_world_presets')}
                         </button>
                         <button
                            className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${newWorldTab === 'import' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
                            onClick={() => setNewWorldTab('import')}
                         >
-                           导入文本分析
+                           {t('tab_new_world_import')}
                         </button>
                      </div>
 
@@ -434,22 +434,22 @@ const App: React.FC = () => {
                               <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                  <Sparkles className="w-8 h-8 text-indigo-600" />
                               </div>
-                              <h3 className="text-lg font-bold text-slate-800">从零开始</h3>
+                              <h3 className="text-lg font-bold text-slate-800">{t('new_world_from_scratch_title')}</h3>
                               <p className="text-slate-500 text-sm max-w-sm mx-auto">
-                                 创建一个完全空白的通用世界模型。您可以手动添加实体，或使用 AI 辅助生成各个层级的内容。
+                                 {t('new_world_from_scratch_desc')}
                               </p>
                               <button
                                  onClick={persistence.handleCreateEmptyWorld}
                                  className="mt-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200/50 transition-all"
                               >
-                                 立即创建
+                                 {t('action_create_now')}
                               </button>
                            </div>
                         )}
 
                         {newWorldTab === 'presets' && (
                            <div className="space-y-4">
-                              <p className="text-sm text-slate-500 mb-2">选择一个经典的历史或虚构场景，AI 将为您生成完整的社会结构。</p>
+                              <p className="text-sm text-slate-500 mb-2">{t('preset_selection_desc')}</p>
                               <div className="grid grid-cols-1 gap-4">
                                  {WORLD_PRESETS.map(preset => (
                                     <button
@@ -469,10 +469,10 @@ const App: React.FC = () => {
 
                         {newWorldTab === 'import' && (
                            <div className="space-y-4">
-                              <p className="text-sm text-slate-500">粘贴您的小说大纲或正文，AI 将自动分析并提取社会实体。</p>
+                              <p className="text-sm text-slate-500">{t('import_text_desc')}</p>
                               <textarea
                                  className="w-full h-48 p-4 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                 placeholder="在此粘贴文本..."
+                                 placeholder={t('placeholder_import_text')}
                                  value={importText}
                                  onChange={e => setImportText(e.target.value)}
                               />
@@ -481,7 +481,7 @@ const App: React.FC = () => {
                                     onClick={() => persistence.handleImportWorld(importText)}
                                     className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-2"
                                  >
-                                    开始分析
+                                    {t('action_start_analysis')}
                                  </button>
                               </div>
                            </div>
@@ -496,18 +496,18 @@ const App: React.FC = () => {
             persistence.showSaveModal && (
                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                   <div className="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm animate-fadeIn">
-                     <h3 className="font-bold text-lg mb-4">保存世界</h3>
+                     <h3 className="font-bold text-lg mb-4">{t('modal_save_world_title')}</h3>
                      <input
                         autoFocus
                         className="w-full p-2 border rounded mb-4"
                         value={persistence.worldName}
                         onChange={e => persistence.setWorldName(e.target.value)}
-                        placeholder="世界名称..."
+                        placeholder={t('placeholder_world_name')}
                      />
                      <div className="flex justify-end gap-2">
-                        <button onClick={() => persistence.setShowSaveModal(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded">取消</button>
+                        <button onClick={() => persistence.setShowSaveModal(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded">{t('action_cancel')}</button>
                         <button onClick={persistence.handleSaveWorld} disabled={persistence.isSaving} className="px-4 py-2 bg-indigo-600 text-white rounded font-bold">
-                           {persistence.isSaving ? "保存中..." : "确认保存"}
+                           {persistence.isSaving ? t('status_saving') : t('action_confirm_save')}
                         </button>
                      </div>
                   </div>
@@ -520,14 +520,14 @@ const App: React.FC = () => {
                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                   <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
                      <div className="p-4 border-b flex justify-between items-center">
-                        <h3 className="font-bold text-lg">加载世界存档</h3>
+                        <h3 className="font-bold text-lg">{t('modal_load_world_title')}</h3>
                         <button onClick={() => persistence.setShowLoadModal(false)}><X className="w-5 h-5 text-slate-400" /></button>
                      </div>
                      <div className="flex-1 overflow-y-auto p-2">
                         {persistence.isLoadingWorlds ? (
                            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-500" /></div>
                         ) : persistence.savedWorlds.length === 0 ? (
-                           <div className="text-center py-8 text-slate-400">暂无存档</div>
+                           <div className="text-center py-8 text-slate-400">{t('empty_no_saves')}</div>
                         ) : (
                            <div className="space-y-2">
                               {persistence.savedWorlds.map(w => (
@@ -538,7 +538,7 @@ const App: React.FC = () => {
                                     >
                                        <div className="font-bold text-slate-800">{w.name}</div>
                                        <div className="text-xs text-slate-500 flex justify-between mt-1">
-                                          <span>{FRAMEWORKS[w.frameworkId || 'general']?.name || '未知框架'}</span>
+                                          <span>{FRAMEWORKS[w.frameworkId || 'general']?.name || t('framework_unknown')}</span>
                                           <span>{new Date(w.lastModified).toLocaleDateString()}</span>
                                        </div>
                                     </button>
@@ -549,7 +549,7 @@ const App: React.FC = () => {
                                           if (w.id) persistence.handleDeleteWorld(w.id);
                                        }}
                                        className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center z-10"
-                                       title="删除存档"
+                                       title={t('action_delete_save')}
                                     >
                                        <Trash2 className="w-4 h-4 pointer-events-none" />
                                     </button>
@@ -566,13 +566,13 @@ const App: React.FC = () => {
          {
             showWelcomeModal && !persistence.isGeneratingWorld && (
                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900 text-white p-6">
-                  <div className="max-w-lg w-full text-center space-y-8 animate-fadeIn">
+                     <div className="max-w-lg w-full text-center space-y-8 animate-fadeIn">
                      <div className="w-20 h-20 bg-indigo-500 rounded-2xl mx-auto flex items-center justify-center shadow-2xl shadow-indigo-500/50 mb-6">
                         <span className="font-serif text-5xl font-bold">E</span>
                      </div>
                      <div>
-                        <h1 className="text-4xl font-serif font-bold mb-2">EcoNarrative Studio</h1>
-                        <p className="text-slate-400 text-lg">基于社会生态系统的深度故事引擎</p>
+                        <h1 className="text-4xl font-serif font-bold mb-2">{t('welcome_title')}</h1>
+                        <p className="text-slate-400 text-lg">{t('welcome_subtitle')}</p>
                      </div>
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
@@ -581,17 +581,17 @@ const App: React.FC = () => {
                            className="py-4 bg-white text-slate-900 rounded-xl font-bold hover:bg-indigo-50 transition-colors flex flex-col items-center gap-2"
                         >
                            <Sparkles className="w-6 h-6 text-indigo-600" />
-                           <span>创建新世界</span>
+                           <span>{t('new_world')}</span>
                         </button>
                         <button
                            onClick={() => { setShowWelcomeModal(false); persistence.setShowLoadModal(true); persistence.handleLoadWorldList(); }}
                            className="py-4 bg-slate-800 text-slate-300 rounded-xl font-bold hover:bg-slate-700 transition-colors flex flex-col items-center gap-2 border border-slate-700"
                         >
                            <FolderOpen className="w-6 h-6" />
-                           <span>加载存档</span>
+                           <span>{t('action_load_world')}</span>
                         </button>
                      </div>
-                     <p className="text-xs text-slate-600 mt-8">v1.0 MVP • Built with Google Gemini</p>
+                     <p className="text-xs text-slate-600 mt-8">{t('welcome_version')}</p>
                   </div>
                </div>
             )
