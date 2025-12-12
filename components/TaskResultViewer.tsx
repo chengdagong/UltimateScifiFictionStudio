@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { SocialEntity } from '../types';
 import { ArrowRight, CheckSquare, Square, Tag, Users, MapPin, Building2, Ticket, Zap, Database, BookOpen, Pencil, Save, X, Trash2 } from 'lucide-react';
-import { ENTITY_CATEGORIES } from '../constants/categories'; // Assuming this exists or I'll define options manually
 
 interface TaskResultViewerProps {
     entities: SocialEntity[];
@@ -11,20 +10,20 @@ interface TaskResultViewerProps {
 
 const CATEGORY_ICONS: Record<string, React.ElementType> = {
     'person': Users,
-    'organization': Building2,
-    'location': MapPin,
+    'org': Building2,
+    'place': MapPin,
     'event': Ticket,
-    'technology': Zap,
+    'tech': Zap,
     'resource': Database,
     'belief': BookOpen
 };
 
 const CATEGORY_OPTIONS = [
     { value: 'person', label: '人物' },
-    { value: 'organization', label: '组织' },
-    { value: 'location', label: '地点' },
+    { value: 'org', label: '组织' },
+    { value: 'place', label: '地点' },
     { value: 'event', label: '事件' },
-    { value: 'technology', label: '技术' },
+    { value: 'tech', label: '技术' },
     { value: 'resource', label: '资源' },
     { value: 'belief', label: '信仰' },
 ];
@@ -218,8 +217,8 @@ const TaskResultViewer: React.FC<TaskResultViewerProps> = ({ entities, onConfirm
                                         <div className={`
                                             w-6 h-6 rounded flex items-center justify-center shrink-0
                                             ${entity.category === 'person' ? 'bg-blue-100 text-blue-600' :
-                                                entity.category === 'organization' ? 'bg-purple-100 text-purple-600' :
-                                                    entity.category === 'location' ? 'bg-emerald-100 text-emerald-600' :
+                                                entity.category === 'org' ? 'bg-purple-100 text-purple-600' :
+                                                    entity.category === 'place' ? 'bg-emerald-100 text-emerald-600' :
                                                         entity.category === 'event' ? 'bg-amber-100 text-amber-600' :
                                                             'bg-slate-100 text-slate-500'}
                                         `}>

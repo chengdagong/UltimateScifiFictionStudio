@@ -2,7 +2,6 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { describe, it, expect, vi } from 'vitest';
-import { GitHubProvider } from './components/GitHubContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock matchMedia
@@ -100,9 +99,7 @@ describe('App', () => {
     it('renders application title', async () => {
         render(
             <QueryClientProvider client={queryClient}>
-                <GitHubProvider>
-                    <App />
-                </GitHubProvider>
+                <App />
             </QueryClientProvider>
         );
 

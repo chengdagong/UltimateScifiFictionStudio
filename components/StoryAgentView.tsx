@@ -44,7 +44,7 @@ interface StoryAgentViewProps {
     // Artifacts State
     artifacts: StoryArtifact[];
     onUpdateArtifacts: (val: StoryArtifact[]) => void;
-    onAnalysisRequest?: (text: string) => void;
+    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
     taskManager?: any; // Use weak type for now or import ReturnType. Ideally import Hook return type.
 }
 

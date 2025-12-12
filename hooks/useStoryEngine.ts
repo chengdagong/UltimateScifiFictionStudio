@@ -1,5 +1,6 @@
-import { useState, Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 import { StoryAgent, WorkflowStep, StepExecutionLog, StoryArtifact } from '../types';
+import { useStoryStore } from '../stores/storyStore';
 
 export interface UseStoryEngineReturn {
     agents: StoryAgent[];
@@ -27,41 +28,56 @@ export interface UseStoryEngineReturn {
     resetStoryEngine: () => void;
 }
 
+/**
+ * 兼容层：包装 Zustand storyStore，保持原有 API 接口
+ * 注意：为了完全兼容 React.Dispatch<SetStateAction<T>>，需要支持函数式更新
+ */
 export const useStoryEngine = (): UseStoryEngineReturn => {
-    const [agents, setAgents] = useState<StoryAgent[]>([]);
-    const [workflow, setWorkflow] = useState<WorkflowStep[]>([]);
-
-    // Lifted Workflow Execution State (Persisted across tabs)
-    const [storyGuidance, setStoryGuidance] = useState("");
-    const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'paused' | 'completed'>('idle');
-    const [currentStepIndex, setCurrentStepIndex] = useState(-1);
-    const [executionLogs, setExecutionLogs] = useState<Record<string, StepExecutionLog>>({});
-    const [stepOutputs, setStepOutputs] = useState<Record<string, string>>({});
-    const [generatedDraft, setGeneratedDraft] = useState("");
-    const [artifacts, setArtifacts] = useState<StoryArtifact[]>([]);
-
-    const resetStoryEngine = () => {
-        setAgents([]);
-        setWorkflow([]);
-        setStoryGuidance("");
-        setWorkflowStatus('idle');
-        setCurrentStepIndex(-1);
-        setExecutionLogs({});
-        setStepOutputs({});
-        setGeneratedDraft("");
-        setArtifacts([]);
+    const store = useStoryStore();
+    
+    // 创建兼容 Dispatch<SetStateAction<T>> 的 setter
+    // SetStateAction<T> = T | ((prevState: T) => T)
+    const createStateSetter = <T,>(getValue: () => T, setValue: (value: T) => void): Dispatch<SetStateAction<T>> => {
+        return (action: SetStateAction<T>) => {
+            if (typeof action === 'function') {
+                // 函数式更新
+                const updateFn = action as (prevState: T) => T;
+                setValue(updateFn(getValue()));
+            } else {
+                // 直接更新
+                setValue(action);
+            }
+        };
     };
-
+    
     return {
-        agents, setAgents,
-        workflow, setWorkflow,
-        storyGuidance, setStoryGuidance,
-        workflowStatus, setWorkflowStatus,
-        currentStepIndex, setCurrentStepIndex,
-        executionLogs, setExecutionLogs,
-        stepOutputs, setStepOutputs,
-        generatedDraft, setGeneratedDraft,
-        artifacts, setArtifacts,
-        resetStoryEngine
+        agents: store.agents,
+        setAgents: createStateSetter(() => store.agents, store.setAgents),
+        
+        workflow: store.workflow,
+        setWorkflow: createStateSetter(() => store.workflow, store.setWorkflow),
+        
+        storyGuidance: store.storyGuidance,
+        setStoryGuidance: createStateSetter(() => store.storyGuidance, store.setStoryGuidance),
+        
+        workflowStatus: store.workflowStatus,
+        setWorkflowStatus: createStateSetter(() => store.workflowStatus, store.setWorkflowStatus),
+        
+        currentStepIndex: store.currentStepIndex,
+        setCurrentStepIndex: createStateSetter(() => store.currentStepIndex, store.setCurrentStepIndex),
+        
+        executionLogs: store.executionLogs,
+        setExecutionLogs: createStateSetter(() => store.executionLogs, store.setExecutionLogs),
+        
+        stepOutputs: store.stepOutputs,
+        setStepOutputs: createStateSetter(() => store.stepOutputs, store.setStepOutputs),
+        
+        generatedDraft: store.generatedDraft,
+        setGeneratedDraft: createStateSetter(() => store.generatedDraft, store.setGeneratedDraft),
+        
+        artifacts: store.artifacts,
+        setArtifacts: createStateSetter(() => store.artifacts, store.setArtifacts),
+        
+        resetStoryEngine: store.reset
     };
 };

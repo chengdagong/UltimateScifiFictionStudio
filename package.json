@@ -37,7 +37,8 @@
     "react-i18next": "^16.4.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.10.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.53.3",
