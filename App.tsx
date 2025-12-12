@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle } from 'lucide-react';
 
 // Components
@@ -29,6 +30,13 @@ const App: React.FC = () => {
    const [newWorldTab, setNewWorldTab] = useState<'empty' | 'presets' | 'import'>('empty');
    const [importText, setImportText] = useState("");
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
+
+   const { t, i18n } = useTranslation();
+
+   const toggleLanguage = () => {
+      const newLang = i18n.language === 'zh' ? 'en' : 'zh';
+      i18n.changeLanguage(newLang);
+   };
 
    // --- Hooks Initialization ---
    const {
@@ -72,7 +80,7 @@ const App: React.FC = () => {
          <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
             <div className="flex items-center gap-2">
                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-serif font-bold">E</div>
-               <span className="font-serif font-bold text-slate-800">EcoNarrative</span>
+               <span className="font-serif font-bold text-slate-800">{t('app_name')}</span>
             </div>
             <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
                {isMobileMenuOpen ? <X /> : <Menu />}
@@ -90,8 +98,8 @@ const App: React.FC = () => {
                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-serif font-bold text-lg shadow-lg shadow-indigo-500/30 shrink-0">E</div>
                {!isMinimalUI && (
                   <div>
-                     <h1 className="font-serif font-bold text-lg tracking-wide whitespace-nowrap">EcoNarrative</h1>
-                     <p className="text-[10px] opacity-60 uppercase tracking-widest">Studio</p>
+                     <h1 className="font-serif font-bold text-lg tracking-wide whitespace-nowrap">{t('app_name')}</h1>
+                     <p className="text-[10px] opacity-60 uppercase tracking-widest">{t('app_subtitle')}</p>
                   </div>
                )}
             </div>
@@ -103,101 +111,101 @@ const App: React.FC = () => {
                w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-indigo-900/50 transition-all hover:scale-[1.02]
                ${isMinimalUI ? 'p-3 rounded-2xl' : 'py-3 px-4'}
              `}
-                  title={isMinimalUI ? "新建世界" : undefined}
+                  title={isMinimalUI ? t('new_world') : undefined}
                >
                   <Sparkles className="w-4 h-4" />
-                  {!isMinimalUI && "新建世界"}
+                  {!isMinimalUI && t('new_world')}
                </button>
             </div>
 
             <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World)</p>}
+               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_world')}</p>}
 
                <button
                   onClick={() => { setActiveTab('participants'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'participants' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "社会解剖学" : undefined}
+                  title={isMinimalUI ? t('nav_participants') : undefined}
                >
                   <Network className="w-4 h-4" />
-                  {!isMinimalUI && "社会解剖学"}
+                  {!isMinimalUI && t('nav_participants')}
                </button>
 
                <button
                   onClick={() => { setActiveTab('timeline'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'timeline' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "时间轴视图" : undefined}
+                  title={isMinimalUI ? t('nav_timeline') : undefined}
                >
                   <Activity className="w-4 h-4" />
-                  {!isMinimalUI && "时间轴视图"}
+                  {!isMinimalUI && t('nav_timeline')}
                </button>
 
                <button
                   onClick={() => { setActiveTab('tech'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'tech' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "科技树" : undefined}
+                  title={isMinimalUI ? t('nav_techtree') : undefined}
                >
                   <Cpu className="w-4 h-4" />
-                  {!isMinimalUI && "科技树"}
+                  {!isMinimalUI && t('nav_techtree')}
                </button>
 
                <button
                   onClick={() => { setActiveTab('chronicle'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'chronicle' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "史书视图" : undefined}
+                  title={isMinimalUI ? t('nav_chronicle') : undefined}
                >
                   <BookText className="w-4 h-4" />
-                  {!isMinimalUI && "史书视图"}
+                  {!isMinimalUI && t('nav_chronicle')}
                </button>
             </div>
 
             <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事构建 (Story)</p>}
+               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_story')}</p>}
 
                <button
                   onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "头脑风暴" : undefined}
+                  title={isMinimalUI ? t('nav_brainstorm') : undefined}
                >
                   <MessageCircle className="w-4 h-4" />
-                  {!isMinimalUI && "头脑风暴"}
+                  {!isMinimalUI && t('nav_brainstorm')}
                </button>
 
                <button
                   onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "人物卡管理" : undefined}
+                  title={isMinimalUI ? t('nav_characters') : undefined}
                >
                   <User className="w-4 h-4" />
-                  {!isMinimalUI && "人物卡管理"}
+                  {!isMinimalUI && t('nav_characters')}
                </button>
 
                <button
                   onClick={() => { setActiveTab('story'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'story' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "故事引擎" : undefined}
+                  title={isMinimalUI ? t('nav_story_engine') : undefined}
                >
                   <BookOpen className="w-4 h-4" />
-                  {!isMinimalUI && "故事引擎"}
+                  {!isMinimalUI && t('nav_story_engine')}
                </button>
             </div>
 
             <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">数据管理</p>}
+               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_data')}</p>}
                <button
                   onClick={() => { persistence.setShowSaveModal(true); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
-                  title={isMinimalUI ? "保存当前世界" : undefined}
+                  title={isMinimalUI ? t('action_save_world') : undefined}
                >
                   <Save className="w-4 h-4" />
-                  {!isMinimalUI && "保存当前世界"}
+                  {!isMinimalUI && t('action_save_world')}
                </button>
                <button
                   onClick={() => { persistence.handleLoadWorldList(); persistence.setShowLoadModal(true); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
-                  title={isMinimalUI ? "加载存档" : undefined}
+                  title={isMinimalUI ? t('action_load_world') : undefined}
                >
                   <FolderOpen className="w-4 h-4" />
-                  {!isMinimalUI && "加载存档"}
+                  {!isMinimalUI && t('action_load_world')}
                </button>
             </div>
 
@@ -205,16 +213,25 @@ const App: React.FC = () => {
                <button
                   onClick={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
                   className={`flex items-center gap-3 text-slate-400 hover:text-white transition-colors text-sm ${isMinimalUI ? 'justify-center' : ''}`}
-                  title={isMinimalUI ? "全局设置" : undefined}
+                  title={isMinimalUI ? t('action_settings') : undefined}
                >
                   <Settings2 className="w-4 h-4" />
-                  {!isMinimalUI && "全局设置"}
+                  {!isMinimalUI && t('action_settings')}
+               </button>
+
+               <button
+                  onClick={toggleLanguage}
+                  className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800 flex items-center gap-2"
+                  title={i18n.language === 'zh' ? 'Switch to English' : '切换到中文'}
+               >
+                  <Globe2 className="w-4 h-4" />
+                  {!isMinimalUI && <span className="text-xs font-bold uppercase">{i18n.language}</span>}
                </button>
 
                <button
                   onClick={toggleMinimalUI}
                   className="text-slate-500 hover:text-white transition-colors p-1 rounded-md hover:bg-slate-800"
-                  title={isMinimalUI ? "展开侧边栏" : "折叠侧边栏"}
+                  title={isMinimalUI ? t('action_expand_sidebar') : t('action_collapse_sidebar')}
                >
                   {isMinimalUI ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
                </button>
@@ -230,9 +247,9 @@ const App: React.FC = () => {
                   <div>
                      <h2 className="text-lg font-serif font-bold text-slate-800">{persistence.worldName}</h2>
                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <span>{worldModel.model.entities.length} 个实体</span>
+                        <span>{t('count_entities', { count: worldModel.model.entities.length })}</span>
                         <span>•</span>
-                        <span>{worldModel.storySegments.length} 个章节</span>
+                        <span>{t('count_chapters', { count: worldModel.storySegments.length })}</span>
                      </div>
                   </div>
                </div>
@@ -242,7 +259,7 @@ const App: React.FC = () => {
                      onClick={persistence.handleSaveWorld}
                      disabled={persistence.isSaving}
                      className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors"
-                     title="保存"
+                     title={t('action_save')}
                   >
                      <Save className="w-4 h-4" />
                   </button>
@@ -253,7 +270,7 @@ const App: React.FC = () => {
                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
                   >
                      {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                     <span>同步世界状态</span>
+                     <span>{t('action_sync')}</span>
                   </button>
                </div>
             </header>

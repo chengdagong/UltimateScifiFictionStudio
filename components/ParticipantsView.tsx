@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SocialEntity, EntityCategory, LayerDefinition, FrameworkDefinition, EntityRelationship, EntityState } from '../types';
 import {
   Search, Plus, Sparkles, Trash2, Save,
@@ -41,14 +42,14 @@ const CategoryIcon: React.FC<{ category: EntityCategory, className?: string }> =
 
 const getCategoryLabel = (category: EntityCategory): string => {
   switch (category) {
-    case EntityCategory.PERSON: return "人物";
-    case EntityCategory.ORGANIZATION: return "组织";
-    case EntityCategory.TECHNOLOGY: return "技术";
-    case EntityCategory.RESOURCE: return "资源";
-    case EntityCategory.BELIEF: return "信仰/法律";
-    case EntityCategory.PLACE: return "地点";
-    case EntityCategory.EVENT: return "事件";
-    default: return "未知";
+    case EntityCategory.PERSON: return "category_person";
+    case EntityCategory.ORGANIZATION: return "category_org";
+    case EntityCategory.TECHNOLOGY: return "category_tech";
+    case EntityCategory.RESOURCE: return "category_resource";
+    case EntityCategory.BELIEF: return "category_belief";
+    case EntityCategory.PLACE: return "category_place";
+    case EntityCategory.EVENT: return "category_event";
+    default: return "category_unknown";
   }
 };
 
@@ -76,6 +77,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
   loadingLayerId,
   isMinimalUI = false
 }) => {
+  const { t } = useTranslation();
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<EntityCategory | 'all'>('all');
@@ -194,8 +196,8 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
         groups.push({
           layer: {
             id: 'layer_virtual_other',
-            title: '未分类 (Other)',
-            description: '未归类到当前框架的实体',
+            title: t('layer_virtual_other_title'),
+            description: t('layer_virtual_other_desc'),
             colorClass: 'bg-slate-100 border-slate-300 text-slate-500',
             allowedCategories: [EntityCategory.UNKNOWN] // Fallback
           },
@@ -218,7 +220,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
 
   const handleCreateInLayer = (layer: LayerDefinition) => {
     const defaultCat = activeCategory !== 'all' ? activeCategory : layer.allowedCategories[0];
-    const newId = onAddEntity("新实体", "描述...", defaultCat);
+    const newId = onAddEntity(t('new_entity_default_name'), t('new_entity_default_desc'), defaultCat);
     setSelectedEntityId(newId);
   };
 
@@ -232,7 +234,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
       return (
         <div className="flex flex-col items-center justify-center h-48 text-slate-400 text-xs italic">
           <Layers className="w-8 h-8 mb-2 opacity-20" />
-          <p>{compact ? '无数据' : '该类别暂无实体'}</p>
+          <p>{compact ? t('empty_no_data') : t('empty_category_no_entities')}</p>
           {activeCategory !== 'all' && (
             <button
               onClick={() => {
@@ -241,7 +243,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               }}
               className="mt-2 text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" /> 创建
+              <Plus className="w-3 h-3" /> {t('action_create')}
             </button>
           )}
         </div>
@@ -262,21 +264,21 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
           <div className="flex items-center justify-between mb-3 px-1 sticky top-0 bg-slate-50/95 backdrop-blur py-2 z-10 border-b border-transparent hover:border-slate-200 transition-colors">
             <div className="flex items-center gap-2">
               <div className={`w-1.5 h-4 rounded-full ${group.layer.colorClass.replace('text-', 'bg-').replace('btn-', '')}`}></div>
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{group.layer.title}</h3>
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{group.layer.title.startsWith('layer_') || group.layer.title.startsWith('framework_') ? t(group.layer.title) : group.layer.title}</h3>
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onGenerateLayer(group.layer.id)}
                 disabled={loadingLayerId === group.layer.id}
                 className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors disabled:opacity-50"
-                title="AI 生成"
+                title={t('action_ai_generate')}
               >
                 {loadingLayerId === group.layer.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               </button>
               <button
                 onClick={() => handleCreateInLayer(group.layer)}
                 className="p-1.5 text-slate-600 hover:bg-slate-200 rounded transition-colors"
-                title="添加"
+                title={t('action_add')}
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -350,7 +352,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
         >
           {/* PANE 1: RAIL (Navigation) */}
           <div className="w-16 border-r border-slate-200 flex flex-col items-center py-4 gap-4 z-20 shrink-0 overflow-x-hidden h-full">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mb-2" title={viewMode === 'list' ? "列表模式" : "图谱模式"}>
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl mb-2" title={viewMode === 'list' ? t('view_mode_list') : t('view_mode_graph')}>
               {viewMode === 'list' ? <Network className="w-6 h-6" /> : <GitGraph className="w-6 h-6" />}
             </div>
 
@@ -362,7 +364,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
               <button
                 onClick={() => setActiveCategory('all')}
                 className={`p-2 rounded-xl transition-all ${activeCategory === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'}`}
-                title="全部"
+                title={t('filter_all')}
               >
                 <Layers className="w-5 h-5" />
               </button>
@@ -372,7 +374,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
                   className={`p-2 rounded-xl transition-all group ${activeCategory === cat ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-200 hover:text-slate-600'}`}
-                  title={getCategoryLabel(cat)}
+                  title={t(getCategoryLabel(cat))}
                 >
                   <CategoryIcon category={cat} className="w-5 h-5" />
                 </button>
@@ -392,7 +394,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             {/* Header */}
             <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-bold text-slate-700 text-sm truncate">
-                {activeCategory === 'all' ? '所有实体' : getCategoryLabel(activeCategory)}
+                {activeCategory === 'all' ? t('filter_all_entities') : t(getCategoryLabel(activeCategory))}
               </h3>
               <div className="flex gap-1">
                 <button
@@ -403,7 +405,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                     if (layer) handleCreateInLayer(layer);
                   }}
                   className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                  title="添加实体"
+                  title={t('action_add_entity')}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -434,8 +436,8 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   {viewMode === 'list' ? <Network className="w-5 h-5" /> : <GitGraph className="w-5 h-5" />}
                 </div>
                 <div>
-                  <h2 className="text-sm font-serif font-bold text-slate-800 leading-none">社会解剖学</h2>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Social Anatomy</p>
+                  <h2 className="text-sm font-serif font-bold text-slate-800 leading-none">{t('participants_title')}</h2>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{t('participants_subtitle')}</p>
                 </div>
               </div>
 
@@ -443,14 +445,14 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 <button
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                  title="列表视图"
+                  title={t('view_mode_list_tooltip')}
                 >
                   <List className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('graph')}
                   className={`p-1.5 rounded transition-all ${viewMode === 'graph' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                  title="图谱视图"
+                  title={t('view_mode_graph_tooltip')}
                 >
                   <GitGraph className="w-4 h-4" />
                 </button>
@@ -468,7 +470,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   value={viewTime || ""}
                   onChange={(e) => setViewTime(e.target.value || null)}
                 >
-                  <option value="">全局视图</option>
+                  <option value="">{t('view_global')}</option>
                   {availableTimePoints.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
@@ -479,7 +481,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="搜索..."
+                    placeholder={t('search_placeholder')}
                     className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none transition-all"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
@@ -499,7 +501,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                             ${activeCategory === 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}
                         `}
               >
-                全部
+                {t('filter_all')}
               </button>
               {availableCategories.map(cat => (
                 <button
@@ -511,7 +513,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                             `}
                 >
                   <CategoryIcon category={cat} className="w-3.5 h-3.5" />
-                  <span>{getCategoryLabel(cat).split(' ')[0]}</span>
+                  <span>{t(getCategoryLabel(cat)).split(' ')[0]}</span>
                   <span className={`px-1.5 py-0.5 rounded-full text-[9px] min-w-[16px] text-center ml-1 ${activeCategory === cat ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                     {getCategoryCount(cat)}
                   </span>
@@ -579,9 +581,9 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             <div className="w-24 h-24 rounded-3xl bg-white flex items-center justify-center mb-6 shadow-sm border border-slate-100">
               {viewMode === 'list' ? <Network className="w-10 h-10 text-slate-300" /> : <GitGraph className="w-10 h-10 text-slate-300" />}
             </div>
-            <p className="font-serif text-xl text-slate-400 font-bold mb-2">查看实体详情</p>
+            <p className="font-serif text-xl text-slate-400 font-bold mb-2">{t('entity_detail_view_details')}</p>
             <p className="text-sm opacity-60 max-w-xs text-center leading-relaxed">
-              {viewMode === 'graph' ? "在图谱中点击节点，或拖拽以调整布局。" : "在左侧列表中点击任意实体，即可在此处编辑其属性与关系。"}
+              {viewMode === 'graph' ? t('entity_detail_view_hint_graph') : t('entity_detail_view_hint_list')}
             </p>
           </div>
         )}
@@ -599,6 +601,7 @@ const RelationshipEditor: React.FC<{
   onRemove: (id: string) => void;
   viewTime?: string | null;
 }> = ({ entityId, allEntities, relationships, onAdd, onRemove, viewTime }) => {
+  const { t } = useTranslation();
   const [isAdding, setIsAdding] = useState(false);
   const [targetId, setTargetId] = useState("");
   const [type, setType] = useState("");
@@ -622,13 +625,13 @@ const RelationshipEditor: React.FC<{
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-          <Network className="w-4 h-4" /> {viewTime ? `关系 (${viewTime})` : "关系"} ({relationships.length})
+          <Network className="w-4 h-4" /> {viewTime ? `${t('section_relationships')} (${viewTime})` : t('section_relationships')} ({relationships.length})
         </label>
         <button
           onClick={() => setIsAdding(!isAdding)}
           className="text-xs flex items-center gap-1 font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors"
         >
-          <Plus className="w-3.5 h-3.5" /> 添加
+          <Plus className="w-3.5 h-3.5" /> {t('action_add_relationship')}
         </button>
       </div>
 
@@ -641,14 +644,14 @@ const RelationshipEditor: React.FC<{
               value={targetId}
               onChange={e => setTargetId(e.target.value)}
             >
-              <option value="">选择目标...</option>
+              <option value="">{t('placeholder_select_target')}</option>
               {allEntities.filter(e => e.id !== entityId).map(e => (
                 <option key={e.id} value={e.id}>{e.name} ({e.category})</option>
               ))}
             </select>
             <input
               className="w-full p-2 border rounded text-xs"
-              placeholder="关系类型 (如: 盟友)..."
+              placeholder={t('placeholder_relationship_type')}
               value={type}
               onChange={e => setType(e.target.value)}
             />
@@ -658,14 +661,14 @@ const RelationshipEditor: React.FC<{
             <div className="flex items-center gap-2">
               <input
                 className="w-1/2 p-2 border rounded text-xs"
-                placeholder="开始时间 (可选)..."
+                placeholder={t('placeholder_start_time')}
                 value={validFrom}
                 onChange={e => setValidFrom(e.target.value)}
               />
               <span className="text-slate-400">-</span>
               <input
                 className="w-1/2 p-2 border rounded text-xs"
-                placeholder="结束时间 (可选)..."
+                placeholder={t('placeholder_end_time')}
                 value={validTo}
                 onChange={e => setValidTo(e.target.value)}
               />
@@ -674,13 +677,13 @@ const RelationshipEditor: React.FC<{
 
           <input
             className="w-full p-2 border rounded text-xs"
-            placeholder="描述 (可选)..."
+            placeholder={t('placeholder_rel_desc')}
             value={desc}
             onChange={e => setDesc(e.target.value)}
           />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setIsAdding(false)} className="px-3 py-1 text-xs text-slate-500">取消</button>
-            <button onClick={handleAdd} className="px-3 py-1 text-xs bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">确认</button>
+            <button onClick={() => setIsAdding(false)} className="px-3 py-1 text-xs text-slate-500">{t('action_cancel')}</button>
+            <button onClick={handleAdd} className="px-3 py-1 text-xs bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">{t('action_confirm')}</button>
           </div>
         </div>
       )}
@@ -689,7 +692,7 @@ const RelationshipEditor: React.FC<{
       <div className="space-y-2">
         {relationships.length === 0 ? (
           <div className="p-2 border border-dashed border-slate-200 rounded-lg text-center text-slate-400 text-xs italic">
-            {viewTime ? "该时期无活跃关系" : "暂无记录"}
+            {viewTime ? t('empty_relationships_active') : t('empty_relationships')}
           </div>
         ) : (
           relationships.map(rel => {
@@ -708,12 +711,12 @@ const RelationshipEditor: React.FC<{
                       {isSource ? (
                         <>
                           <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">{rel.type}</span>
-                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || "未知"}</span>
+                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || t('category_unknown')}</span>
                         </>
                       ) : (
                         <>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">被</span>
-                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || "未知"}</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">{t('rel_passive_tag')}</span>
+                          <span className="text-xs font-semibold text-slate-800 truncate">{other?.name || t('category_unknown')}</span>
                           <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-1.5 rounded">{rel.type}</span>
                         </>
                       )}
@@ -771,6 +774,7 @@ const EntityDetailForm: React.FC<{
   onAddEntityState, onUpdateEntityState, onRemoveEntityState,
   onBack
 }) => {
+    const { t } = useTranslation();
     const [name, setName] = useState(entity.name);
     const [desc, setDesc] = useState(entity.description);
     const [category, setCategory] = useState(entity.category);
@@ -868,7 +872,7 @@ const EntityDetailForm: React.FC<{
               <ArrowLeft className="w-5 h-5" />
             </button>
             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${currentLayer?.colorClass.replace('bg-', 'bg-opacity-10 bg-')}`}>
-              {currentLayer?.title || "未知层级"}
+              {currentLayer?.title.startsWith('layer_') ? t(currentLayer.title) : (currentLayer?.title || t('unknown_layer'))}
             </span>
             {viewTime && (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
@@ -876,11 +880,11 @@ const EntityDetailForm: React.FC<{
               </span>
             )}
             <span className="text-[10px] text-slate-400 flex items-center gap-1 ml-2">
-              {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> 保存中...</>}
-              {saveStatus === 'saved' && <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> 已保存</>}
+              {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> {t('status_saving')}</>}
+              {saveStatus === 'saved' && <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> {t('status_saved')}</>}
             </span>
           </div>
-          <button onClick={onRemove} className="text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors" title="删除实体">
+          <button onClick={onRemove} className="text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-colors" title={t('action_delete_entity')}>
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -890,7 +894,7 @@ const EntityDetailForm: React.FC<{
           <div className="space-y-4">
             <textarea
               className="w-full text-2xl font-serif font-bold text-slate-800 placeholder-slate-300 resize-none outline-none bg-transparent"
-              placeholder="实体名称..."
+              placeholder={t('entity_detail_placeholder_name')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={handleBlur}
@@ -900,30 +904,30 @@ const EntityDetailForm: React.FC<{
             {/* Metadata Row */}
             <div className="flex gap-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
               <div className="w-1/2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">类别</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">{t('entity_detail_label_category')}</label>
                 <select
                   className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs font-medium"
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value as EntityCategory)}
                 >
                   {Object.values(EntityCategory).map(cat => (
-                    <option key={cat} value={cat}>{getCategoryLabel(cat)}</option>
+                    <option key={cat} value={cat}>{t(getCategoryLabel(cat))}</option>
                   ))}
                 </select>
               </div>
               <div className="w-1/2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">存续时间</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">{t('entity_detail_label_duration')}</label>
                 <div className="flex items-center gap-1">
                   <input
                     className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
-                    placeholder="开始"
+                    placeholder={t('entity_detail_placeholder_start')}
                     value={validFrom}
                     onChange={e => setValidFrom(e.target.value)}
                   />
                   <span className="text-slate-300">-</span>
                   <input
                     className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs font-mono"
-                    placeholder="结束"
+                    placeholder={t('entity_detail_placeholder_end')}
                     value={validTo}
                     onChange={e => setValidTo(e.target.value)}
                   />
@@ -932,10 +936,10 @@ const EntityDetailForm: React.FC<{
             </div>
 
             <div>
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">基础描述</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">{t('entity_detail_label_basic_desc')}</label>
               <textarea
                 className="w-full min-h-[100px] text-sm text-slate-600 leading-relaxed resize-none outline-none border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-100 transition-all hover:border-slate-300"
-                placeholder="添加详细描述..."
+                placeholder={t('entity_detail_placeholder_desc')}
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
                 onBlur={handleBlur}
@@ -949,13 +953,13 @@ const EntityDetailForm: React.FC<{
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                <History className="w-4 h-4" /> 时空演变 (Temporal States)
+                <History className="w-4 h-4" /> {t('section_temporal_states')}
               </label>
               <button
                 onClick={() => setIsAddingState(true)}
                 className="text-xs flex items-center gap-1 font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors"
               >
-                <Plus className="w-3.5 h-3.5" /> 记录新状态
+                <Plus className="w-3.5 h-3.5" /> {t('action_record_new_state')}
               </button>
             </div>
 
@@ -965,20 +969,20 @@ const EntityDetailForm: React.FC<{
                 <input
                   autoFocus
                   className="w-24 p-2 border rounded text-xs"
-                  placeholder="时间点..."
+                  placeholder={t('placeholder_time_point')}
                   value={newStateTime}
                   onChange={e => setNewStateTime(e.target.value)}
                 />
                 <div className="flex-1" />
-                <button onClick={handleAddState} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold hover:bg-indigo-700">确定</button>
-                <button onClick={() => setIsAddingState(false)} className="text-xs text-slate-500 hover:bg-slate-200 px-2 py-1.5 rounded">取消</button>
+                <button onClick={handleAddState} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded font-bold hover:bg-indigo-700">{t('action_confirm')}</button>
+                <button onClick={() => setIsAddingState(false)} className="text-xs text-slate-500 hover:bg-slate-200 px-2 py-1.5 rounded">{t('action_cancel')}</button>
               </div>
             )}
 
             <div className="space-y-3">
               {myStates.length === 0 ? (
                 <div className="text-xs text-slate-400 italic p-4 text-center border border-dashed border-slate-200 rounded-lg">
-                  该实体暂无特定的历史状态记录。
+                  {t('empty_temporal_states')}
                 </div>
               ) : (
                 myStates.map(state => (
@@ -994,7 +998,7 @@ const EntityDetailForm: React.FC<{
                       rows={2}
                       value={state.description}
                       onChange={e => onUpdateEntityState(state.id, e.target.value)}
-                      placeholder="描述该时间点的状态..."
+                      placeholder={t('placeholder_state_desc')}
                     />
                   </div>
                 ))

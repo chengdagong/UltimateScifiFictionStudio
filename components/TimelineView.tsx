@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as d3Import from 'd3';
 import { WorldModel, StorySegment, FrameworkDefinition, SocialEntity, EntityCategory } from '../types';
 import { Info, ZoomIn, ZoomOut, Move } from 'lucide-react';
@@ -49,6 +50,7 @@ interface GraphLink extends SimulationLinkDatum<GraphNode> {
 }
 
 const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, framework }) => {
+    const { t } = useTranslation();
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
@@ -76,7 +78,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, frame
         // If no story, create a placeholder
         const segmentsToProcess = storySegments.length > 0
             ? storySegments
-            : [{ id: 'start', timestamp: '初始状态', content: '世界刚刚诞生...', influencedBy: [] }];
+            : [{ id: 'start', timestamp: t('timeline_initial_state'), content: t('timeline_initial_desc'), influencedBy: [] }];
 
         segmentsToProcess.forEach((seg, index) => {
             // A. Create Event Node (The Spine)
@@ -147,7 +149,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, frame
         });
 
         return { nodes, links };
-    }, [model, storySegments, framework]);
+    }, [model, storySegments, framework, t]);
 
 
     // --- 2. D3 Rendering ---
@@ -416,10 +418,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, frame
                 <div>
                     <h2 className="text-xl font-serif font-bold text-slate-800 flex items-center gap-2">
                         <Move className="w-5 h-5 text-indigo-700" />
-                        历史图谱 (History Graph)
+                        {t('timeline_title')}
                     </h2>
                     <p className="text-xs text-slate-500 mt-1">
-                        时间轴位于顶部，社会实体如同气泡般悬挂在历史长河之下。
+                        {t('timeline_subtitle')}
                     </p>
                 </div>
             </div>
@@ -434,7 +436,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, frame
                     >
                         <div className="flex items-start justify-between mb-2">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${hoveredNode.type === 'EVENT' ? 'bg-slate-800' : 'bg-indigo-500'}`}>
-                                {hoveredNode.type === 'EVENT' ? '历史节点' : '社会实体'}
+                                {hoveredNode.type === 'EVENT' ? t('timeline_node_event') : t('timeline_node_entity')}
                             </span>
                             {hoveredNode.type === 'EVENT' && <span className="text-xs font-mono text-slate-400">#{hoveredNode.timeIndex + 1}</span>}
                         </div>
@@ -449,8 +451,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, frame
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-100 text-center max-w-md">
                             <Info className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                            <h3 className="font-bold text-slate-700 mb-1">暂无历史数据</h3>
-                            <p className="text-sm text-slate-500">请前往“故事引擎”生成章节，或使用预设剧本创建世界，图谱将在此处自动生成。</p>
+                            <h3 className="font-bold text-slate-700 mb-1">{t('timeline_empty_title')}</h3>
+                            <p className="text-sm text-slate-500">{t('timeline_empty_desc')}</p>
                         </div>
                     </div>
                 )}
