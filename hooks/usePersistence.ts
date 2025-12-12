@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 // import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
-import { saveWorld, getWorlds, deleteWorld, commitProject } from '../services/LocalStorageService';
+import { saveProject, createProject, getProjects, deleteProject, commitProject } from '../services/LocalStorageService';
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
@@ -55,7 +55,7 @@ export const usePersistence = ({
         refetch: refetchWorldList
     } = useQuery({
         queryKey: ['worlds'],
-        queryFn: getWorlds,
+        queryFn: getProjects,
         // Only fetch when user is authenticated
         enabled: !!user,
         // Don't refetch automatically on window focus to avoid screen jumping if user is editing
@@ -85,8 +85,11 @@ export const usePersistence = ({
     const autoSaveMutation = useMutation({
         mutationFn: async (data: WorldData) => {
             if (!data.name) return;
-            // Only save to Firebase (or Local DB)
-            return await saveWorld(data);
+            // Auto-save should always have an ID (project must exist)
+            if (!data.id) {
+                throw new Error('Cannot auto-save without project ID');
+            }
+            return await saveProject(data);
         },
         onSuccess: (savedId) => {
             if (!currentWorldId && savedId) {
@@ -112,8 +115,11 @@ export const usePersistence = ({
     const saveMutation = useMutation({
         mutationFn: async (data: WorldData) => {
             if (!data.name) throw new Error("请输入世界名称");
-            // Just save locally
-            return await saveWorld(data);
+            // If no ID, create new project; otherwise update existing
+            if (!data.id) {
+                return await createProject(data);
+            }
+            return await saveProject(data);
         },
         onSuccess: (savedId) => {
             setCurrentWorldId(savedId);
@@ -181,7 +187,7 @@ export const usePersistence = ({
 
     // 5. Delete World Mutation
     const deleteMutation = useMutation({
-        mutationFn: deleteWorld,
+        mutationFn: deleteProject,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
         },
@@ -213,8 +219,8 @@ export const usePersistence = ({
                 artifacts: []
             };
 
-            // Save to backend - saveWorld will call createProject which returns the new ID
-            const newId = await saveWorld(newWorld);
+            // Save to backend - createProject returns the new ID
+            const newId = await createProject(newWorld);
             return { ...newWorld, id: newId };
         },
         onSuccess: (newWorld) => {
@@ -265,7 +271,7 @@ export const usePersistence = ({
                 artifacts: []
             };
 
-            const newId = await saveWorld(newWorld);
+            const newId = await createProject(newWorld);
             return { ...newWorld, id: newId };
         },
         onSuccess: (newWorld) => {
@@ -319,7 +325,7 @@ export const usePersistence = ({
                 artifacts: []
             };
 
-            const newId = await saveWorld(newWorld);
+            const newId = await createProject(newWorld);
             return { ...newWorld, id: newId };
         },
         onSuccess: (newWorld) => {
