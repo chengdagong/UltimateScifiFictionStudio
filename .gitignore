@@ -25,3 +25,4 @@ config.json
 *.sw?
 
 .env
+data/

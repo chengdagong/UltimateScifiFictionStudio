@@ -14,9 +14,7 @@ if (container) {
   root.render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <GitHubProvider>
-          <App />
-        </GitHubProvider>
+        <App />
       </QueryClientProvider>
     </React.StrictMode>
   );

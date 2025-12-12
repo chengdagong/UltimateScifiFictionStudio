@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginPage } from './components/LoginPage';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle, Inbox } from 'lucide-react';
+import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle, Inbox, GitBranch, LogOut } from 'lucide-react';
 import { extractEntitiesFromSnippet } from './services/geminiService';
 import { SocialEntity } from './types';
 
@@ -13,16 +16,12 @@ import StoryAgentView from './components/StoryAgentView';
 import TechTreeView from './components/TechTreeView';
 import CharacterCardView from './components/CharacterCardView';
 import BrainstormView from './components/BrainstormView';
+import { GitView } from './components/GitView';
 import SettingsModal from './components/SettingsModal';
 import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
 import { StatusBar } from './components/StatusBar';
-import { GitHubConnectModal } from './components/GitHubConnectModal';
-import { RepoSelectionModal } from './components/RepoSelectionModal';
-import { BranchManagementModal } from './components/BranchManagementModal';
 import TaskListView from './components/TaskListView';
 import { Toast, ToastType } from './components/Toast';
-
-import { useGitHub } from './components/GitHubContext';
 
 // Hooks
 import { useApiSettings } from './hooks/useApiSettings';
@@ -35,32 +34,23 @@ import { useAiTaskManager } from './hooks/useAiTaskManager';
 import { WORLD_PRESETS } from './constants/presets';
 import { FRAMEWORKS } from './constants/frameworks';
 
-const App: React.FC = () => {
-   // App UI State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks'>('participants');
+// Protected Route Wrapper
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+   const { isAuthenticated } = useAuth();
+   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const DashboardContent: React.FC = () => {
+   // App UI State - includes both 'tasks' and 'git' tabs
+   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks' | 'git'>('participants');
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [newWorldTab, setNewWorldTab] = useState<'empty' | 'presets' | 'import'>('empty');
    const [importText, setImportText] = useState("");
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
-   const [showGitHubConnectModal, setShowGitHubConnectModal] = useState(false);
-   const [showRepoSelectionModal, setShowRepoSelectionModal] = useState(false);
-   const [showBranchModal, setShowBranchModal] = useState(false);
+   const [showUserMenu, setShowUserMenu] = useState(false);
 
-   const { login, logout, user: githubUser, isLoading: isGithubLoading, currentRepo } = useGitHub();
+   const { user, logout } = useAuth();
 
-   // Check for GitHub connection on startup
-   useEffect(() => {
-      if (!isGithubLoading) {
-         if (!githubUser) {
-            // Prompt to connect if not connected (delayed)
-            const timer = setTimeout(() => setShowGitHubConnectModal(true), 2000);
-            return () => clearTimeout(timer);
-         } else if (!currentRepo) {
-            // Connected but no repo selected
-            setShowRepoSelectionModal(true);
-         }
-      }
-   }, [isGithubLoading, githubUser, currentRepo]);
 
    const { t, i18n } = useTranslation();
 
@@ -91,6 +81,13 @@ const App: React.FC = () => {
       checkApiKey,
       setActiveTab
    });
+
+   // Auto-close welcome modal when a world is loaded (e.g. auto-load)
+   useEffect(() => {
+      if (persistence.currentWorldId) {
+         setShowWelcomeModal(false);
+      }
+   }, [persistence.currentWorldId]);
 
    // --- Derived State for UI Rendering ---
    const {
@@ -317,6 +314,19 @@ const App: React.FC = () => {
                   </button>
                </div>
 
+               {/* VERSION CONTROL (Local Git) */}
+               <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
+                  {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Version Control</p>}
+                  <button
+                     onClick={() => { setActiveTab('git'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'git' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? 'Version Control' : undefined}
+                  >
+                     <GitBranch className="w-4 h-4" />
+                     {!isMinimalUI && 'Version Control'}
+                  </button>
+               </div>
+
                {/* DATA */}
                <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
                   {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_data')}</p>}
@@ -405,16 +415,8 @@ const App: React.FC = () => {
                         )}
                      </div>
 
-                     <button
-                        onClick={persistence.handleSaveWorld}
-                        disabled={persistence.isSaving}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors border border-slate-200 rounded-lg hover:border-indigo-300 bg-white"
-                        title={t('action_sync_cloud')}
-                     >
-                        {persistence.isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        <span>{t('action_sync_cloud')}</span>
-                     </button>
                      <div className="h-6 w-px bg-slate-200"></div>
+
                      <button
                         onClick={worldModel.handleGlobalSync}
                         disabled={worldModel.isSyncing}
@@ -423,6 +425,42 @@ const App: React.FC = () => {
                         {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                         <span>{t('action_refresh_status')}</span>
                      </button>
+
+                     <div className="h-6 w-px bg-slate-200 mx-2"></div>
+
+                     {user && (
+                        <div className="relative">
+                           <button
+                              onClick={() => setShowUserMenu(!showUserMenu)}
+                              className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg transition-colors outline-none focus:ring-2 focus:ring-indigo-100"
+                           >
+                              <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-200">
+                                 <User className="w-4 h-4" />
+                              </div>
+                              <span className="font-bold text-slate-700 text-sm hidden lg:block">{user}</span>
+                           </button>
+
+                           {/* User Dropdown Menu */}
+                           {showUserMenu && (
+                              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                 <div className="px-4 py-3 border-b border-slate-50 mb-1">
+                                    <p className="text-sm font-bold text-slate-700">已登录</p>
+                                    <p className="text-xs text-slate-500 truncate">{user}</p>
+                                 </div>
+                                 <button
+                                    onClick={() => {
+                                       setShowUserMenu(false);
+                                       logout();
+                                    }}
+                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors text-left"
+                                 >
+                                    <LogOut className="w-4 h-4" />
+                                    <span>退出登录 (Logout)</span>
+                                 </button>
+                              </div>
+                           )}
+                        </div>
+                     )}
                   </div>
                </header >
 
@@ -567,32 +605,23 @@ const App: React.FC = () => {
                         />
                      )
                   }
+
+                  {
+                     activeTab === 'git' && (
+                        <GitView />
+                     )
+                  }
                </div >
             </main >
          </div >
 
-         <StatusBar isOnline={true} onBranchClick={() => setShowBranchModal(true)} />
+         <StatusBar isOnline={true} />
 
          <SettingsModal
             isOpen={showSettingsModal}
             onClose={() => setShowSettingsModal(false)}
             settings={apiSettings}
             onSave={handleSaveSettings}
-         />
-
-         <GitHubConnectModal
-            isOpen={showGitHubConnectModal}
-            onClose={() => setShowGitHubConnectModal(false)}
-         />
-
-         <RepoSelectionModal
-            isOpen={showRepoSelectionModal}
-            onClose={() => setShowRepoSelectionModal(false)}
-         />
-
-         <BranchManagementModal
-            isOpen={showBranchModal}
-            onClose={() => setShowBranchModal(false)}
          />
 
          {
@@ -795,6 +824,23 @@ const App: React.FC = () => {
          }
 
       </div >
+   );
+};
+
+const App: React.FC = () => {
+   return (
+      <AuthProvider>
+         <BrowserRouter>
+            <Routes>
+               <Route path="/login" element={<LoginPage />} />
+               <Route path="/*" element={
+                  <ProtectedRoute>
+                     <DashboardContent />
+                  </ProtectedRoute>
+               } />
+            </Routes>
+         </BrowserRouter>
+      </AuthProvider>
    );
 };
 

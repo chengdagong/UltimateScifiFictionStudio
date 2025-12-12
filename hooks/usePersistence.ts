@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 // import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
 import { saveWorld, getWorlds, deleteWorld } from '../services/LocalStorageService';
-import { useGitHub } from '../components/GitHubContext';
-import { GitHubService } from '../services/GitHubService';
+import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
 import { UseWorldModelReturn } from './useWorldModel';
@@ -28,15 +27,7 @@ export const usePersistence = ({
     setActiveTab
 }: UsePersistenceProps) => {
     const queryClient = useQueryClient();
-    const { octokit, user: githubUser, currentRepo, currentBranch } = useGitHub();
-
-    const githubService = useMemo(() => {
-        const service = octokit ? new GitHubService(octokit) : null;
-        if (service && currentRepo) {
-            service.setRepo(currentRepo);
-        }
-        return service;
-    }, [octokit, currentRepo]);
+    const { user } = useAuth();
 
     // Persistence State
     const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
@@ -109,39 +100,22 @@ export const usePersistence = ({
         }
     });
 
-    // 3. Sync/Commit (GitHub + Local Snapshot) Mutation
-    const syncMutation = useMutation({
+    // 3. Save to Local Mutation (Replaces previous GitHub Sync)
+    const saveMutation = useMutation({
         mutationFn: async (data: WorldData) => {
             if (!data.name) throw new Error("请输入世界名称");
-
-            // 1. Save to GitHub if connected
-            if (githubService && githubUser) {
-                console.log("Syncing to GitHub...");
-                await githubService.saveFile({
-                    path: `worlds/${data.name.replace(/\s+/g, '_')}.json`,
-                    content: JSON.stringify(data, null, 2),
-                    message: `Sync world: ${data.name} at ${new Date().toLocaleString()}`,
-                    branch: currentBranch || 'main'
-                });
-                console.log("Synced to GitHub");
-            } else {
-                throw new Error("未连接 GitHub，无法同步云端。但已保存到本地。");
-            }
-
-            // 2. Also ensure local DB is up to date
+            // Just save locally
             return await saveWorld(data);
         },
         onSuccess: (savedId) => {
             setCurrentWorldId(savedId);
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
             setShowSaveModal(false);
-            alert("同步云端成功 (Committed & Pushed)！");
+            alert("保存成功 (Saved Successfully)！");
         },
         onError: (e: any) => {
             console.error(e);
-            // Even if GitHub fails, we might have saved locally? 
-            // The mutation function ensures GitHub goes first.
-            alert("同步失败: " + e.message);
+            alert("保存失败: " + e.message);
         }
     });
 
@@ -155,7 +129,7 @@ export const usePersistence = ({
         if (!worldName || worldName === "新世界") return;
 
         const timer = setTimeout(() => {
-            if (!autoSaveMutation.isPending && !syncMutation.isPending) {
+            if (!autoSaveMutation.isPending && !saveMutation.isPending) {
                 setIsAutoSaving(true);
                 autoSaveMutation.mutate(currentData, {
                     onSettled: () => setIsAutoSaving(false)
@@ -297,9 +271,9 @@ export const usePersistence = ({
         createEmptyMutation.mutate();
     };
 
-    const handleSyncToGitHub = () => {
+    const handleSaveLocal = () => {
         const data = constructWorldData();
-        syncMutation.mutate(data);
+        saveMutation.mutate(data);
     };
 
     const handleLoadWorldList = () => {
@@ -308,6 +282,9 @@ export const usePersistence = ({
 
     const handleLoadWorld = (world: WorldData) => {
         setCurrentWorldId(world.id);
+        if (user && world.id) {
+            localStorage.setItem(`lastWorld_${user}`, world.id);
+        }
         setWorldName(world.name);
 
         worldModel.setModel(world.model || { entities: [], relationships: [], entityStates: [], technologies: [], techDependencies: [] });
@@ -350,11 +327,25 @@ export const usePersistence = ({
     // Aggregated Loading State
     const isGeneratingWorld = createEmptyMutation.isPending || importMutation.isPending || presetMutation.isPending;
 
+    // Auto-load last world
+    useEffect(() => {
+        if (!isLoadingWorlds && savedWorlds.length > 0 && user && !currentWorldId) {
+            const lastId = localStorage.getItem(`lastWorld_${user}`);
+            if (lastId) {
+                const world = savedWorlds.find(w => w.id === lastId);
+                if (world) {
+                    handleLoadWorld(world);
+                }
+            }
+        }
+    }, [isLoadingWorlds, savedWorlds, user]); // Run once when worlds loaded
+
     return {
+        // State
         // State
         currentWorldId, setCurrentWorldId,
         worldName, setWorldName,
-        isSaving: syncMutation.isPending, // Start with sync pending
+        isSaving: saveMutation.isPending,
         isAutoSaving,
         lastAutoSaveTime,
         savedWorlds,
@@ -369,7 +360,7 @@ export const usePersistence = ({
 
         // Handlers
         handleCreateEmptyWorld,
-        handleSaveWorld: handleSyncToGitHub, // Renamed in UI
+        handleSaveWorld: handleSaveLocal,
         handleLoadWorldList,
         handleLoadWorld,
         handleDeleteWorld,
