@@ -94,10 +94,15 @@ export const usePersistence = ({
             setLastAutoSaveTime(Date.now());
             // We don't necessarily invalidate queries on every auto-save to avoid UI flicker,
             // but we might want to update the list occasionally.
-            // queryClient.invalidateQueries({ queryKey: ['worlds'] }); 
+            // queryClient.invalidateQueries({ queryKey: ['worlds'] });
         },
-        onError: (e) => {
+        onError: (e: any) => {
             console.warn("Auto-save failed:", e);
+            // If project not found, clear the ID so next save creates a new project
+            if (e?.message?.includes('Project not found')) {
+                console.warn("Project not found, clearing currentWorldId");
+                setCurrentWorldId(undefined);
+            }
         }
     });
 
