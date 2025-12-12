@@ -12,8 +12,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<string | null>(localStorage.getItem('user'));
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const [user, setUser] = useState<string | null>(() => {
+        return localStorage.getItem('user');
+    });
+    const [token, setToken] = useState<string | null>(() => {
+        const savedToken = localStorage.getItem('token');
+        // Immediately set axios header if token exists
+        if (savedToken) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+        }
+        return savedToken;
+    });
 
     useEffect(() => {
         if (token) {
