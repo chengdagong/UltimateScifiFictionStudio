@@ -60,7 +60,7 @@ export interface UseWorldModelReturn {
     resetModel: (initialContext?: string) => void;
 }
 
-export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boolean): UseWorldModelReturn => {
+export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boolean, taskManager?: any): UseWorldModelReturn => {
     // Initial State
     const [currentFrameworkId, setCurrentFrameworkId] = useState<string>('general');
     const [model, setModel] = useState<WorldModel>({
@@ -127,13 +127,30 @@ export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boole
     const handleGenerateLayer = async (layerId: string) => {
         if (!checkApiKey()) return;
         setLoadingLayer(layerId);
+
+        let taskId = "";
+        if (taskManager) {
+            const layerDef = currentFramework.layers.find(l => l.id === layerId);
+            const layerName = layerDef ? layerDef.title : layerId;
+            taskId = taskManager.addTask('generation', `生成层级：${layerName}`, 'AI 正在构建社会结构...', undefined, { layerId });
+            taskManager.updateTask(taskId, { status: 'running', progress: 10 });
+        }
+
         try {
             const layerDef = currentFramework.layers.find(l => l.id === layerId);
             if (!layerDef) return;
+
             const newEntities = await generateEntitiesForLayer(layerDef, worldContext, 0, apiSettings);
             setModel(prev => ({ ...prev, entities: [...prev.entities, ...newEntities] }));
+
+            if (taskId && taskManager) {
+                taskManager.completeTask(taskId, { summary: `生成了 ${newEntities.length} 个实体` });
+            }
         } catch (e: any) {
             alert(e.message);
+            if (taskId && taskManager) {
+                taskManager.failTask(taskId, e.message);
+            }
         } finally {
             setLoadingLayer(null);
         }
@@ -231,6 +248,13 @@ export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boole
         if (!baseNode) return;
 
         setGeneratingTechId(baseNodeId);
+
+        let taskId = "";
+        if (taskManager) {
+            taskId = taskManager.addTask('generation', `研发科技：基于 ${baseNode.name}`, 'AI 正在推演科技树...', undefined, { baseNodeId });
+            taskManager.updateTask(taskId, { status: 'running', progress: 10 });
+        }
+
         try {
             const generatedNode = await generateRelatedTechNode(baseNode, relation, worldContext, apiSettings);
             const newNode: TechNode = { id: crypto.randomUUID(), ...generatedNode };
@@ -251,8 +275,15 @@ export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boole
                 return { ...prev, technologies: newTechs, techDependencies: newDeps };
             });
 
+            if (taskId && taskManager) {
+                taskManager.completeTask(taskId, { summary: `已研发新科技：${generatedNode.name}` });
+            }
+
         } catch (e: any) {
             alert(e.message);
+            if (taskId && taskManager) {
+                taskManager.failTask(taskId, e.message);
+            }
         } finally {
             setGeneratingTechId(null);
         }

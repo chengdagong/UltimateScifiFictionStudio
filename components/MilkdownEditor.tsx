@@ -14,7 +14,7 @@ interface MilkdownEditorProps {
   content: string;
   onChange: (text: string) => void;
   readOnly?: boolean;
-  onAnalysisRequest?: (text: string) => void;
+  onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
 }
 
 const InnerEditor: React.FC<MilkdownEditorProps> = ({ content, onChange, readOnly }) => {
@@ -39,8 +39,8 @@ const InnerEditor: React.FC<MilkdownEditorProps> = ({ content, onChange, readOnl
 };
 
 const MilkdownEditor: React.FC<MilkdownEditorProps> = (props) => {
-  const { handleContextMenu, renderMenu } = useWorldAdminMenu({
-    onAnalyze: (text) => props.onAnalysisRequest?.(text)
+  const { handleContextMenu, handleMouseUp, renderMenu } = useWorldAdminMenu({
+    onAction: (action, text) => props.onAnalysisRequest?.(text, action)
   });
 
   return (
@@ -51,6 +51,7 @@ const MilkdownEditor: React.FC<MilkdownEditorProps> = (props) => {
           handleContextMenu(e, props.content);
         }
       }}
+      onMouseUp={handleMouseUp}
     >
       {renderMenu()}
       <div className="h-full overflow-y-auto custom-editor-wrapper">

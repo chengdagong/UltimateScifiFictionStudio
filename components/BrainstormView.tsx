@@ -12,7 +12,8 @@ import { useWorldAdminMenu } from '../hooks/useWorldAdminMenu';
 interface BrainstormViewProps {
     globalApiSettings: ApiSettings;
     onSaveSession?: (session: BrainstormSession) => void;
-    onAnalysisRequest?: (text: string) => void;
+    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
+    taskManager?: any;
 }
 
 const DEFAULT_CONFIG: BrainstormConfig = {
@@ -27,7 +28,8 @@ const DEFAULT_CONFIG: BrainstormConfig = {
 const BrainstormView: React.FC<BrainstormViewProps> = ({
     globalApiSettings,
     onSaveSession,
-    onAnalysisRequest
+    onAnalysisRequest,
+    taskManager
 }) => {
     // State
     const [sessions, setSessions] = useState<BrainstormSession[]>(() => {
@@ -112,6 +114,15 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
         setInput("");
         setIsSending(true);
 
+        setIsSending(true);
+
+        // 0. Register Task
+        let taskId = "";
+        if (taskManager) {
+            taskId = taskManager.addTask('custom', '头脑风暴', '正在与 AI 进行创意对话...', activeSession.id);
+            taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+        }
+
         // 1. Add User Message
         const userMsg: BrainstormMessage = {
             id: crypto.randomUUID(),
@@ -151,9 +162,17 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
                 lastModified: Date.now()
             } : s));
 
+            if (taskId && taskManager) {
+                taskManager.completeTask(taskId, { summary: '回复完成' });
+            }
+
         } catch (error: any) {
-            alert("发送失败: " + error.message);
-            // Optional: Restore input?
+            console.error(error);
+            if (taskId && taskManager) {
+                taskManager.failTask(taskId, error.message || 'Error');
+            }
+            // Add error system message? Or just alert?
+            // For now, let's keep existing UI behavior but maybe show error toast if we had access to it.
             setInput(currentInput);
         } finally {
             setIsSending(false);
@@ -172,8 +191,8 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
         setSessions(prev => prev.map(s => s.id === id ? { ...s, name: newName } : s));
     };
 
-    const { handleContextMenu, renderMenu } = useWorldAdminMenu({
-        onAnalyze: (text) => onAnalysisRequest?.(text)
+    const { handleContextMenu, handleMouseUp, renderMenu } = useWorldAdminMenu({
+        onAction: (action, text) => onAnalysisRequest?.(text, action)
     });
 
     if (!activeSession) {
@@ -263,6 +282,7 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
                             handleContextMenu(e, "");
                         }
                     }}
+                    onMouseUp={handleMouseUp}
                 >
                     {renderMenu()}
                     {activeSession.messages.length === 0 && (

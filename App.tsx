@@ -13,7 +13,7 @@ import CharacterCardView from './components/CharacterCardView';
 import BrainstormView from './components/BrainstormView';
 import SettingsModal from './components/SettingsModal';
 import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
-import WorldAdminDialog from './components/WorldAdminDialog';
+import TaskListView from './components/TaskListView';
 import { Toast, ToastType } from './components/Toast';
 
 // Hooks
@@ -21,6 +21,7 @@ import { useApiSettings } from './hooks/useApiSettings';
 import { useWorldModel } from './hooks/useWorldModel';
 import { useStoryEngine } from './hooks/useStoryEngine';
 import { usePersistence } from './hooks/usePersistence';
+import { useAiTaskManager } from './hooks/useAiTaskManager';
 
 // Constants
 import { WORLD_PRESETS } from './constants/presets';
@@ -28,7 +29,7 @@ import { FRAMEWORKS } from './constants/frameworks';
 
 const App: React.FC = () => {
    // App UI State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm'>('participants');
+   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks'>('participants');
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [newWorldTab, setNewWorldTab] = useState<'empty' | 'presets' | 'import'>('empty');
    const [importText, setImportText] = useState("");
@@ -46,7 +47,8 @@ const App: React.FC = () => {
 
    const isMinimalUI = apiSettings.minimalUI;
 
-   const worldModel = useWorldModel(apiSettings, checkApiKey);
+   const taskManager = useAiTaskManager(); // Init Task Manager
+   const worldModel = useWorldModel(apiSettings, checkApiKey, taskManager);
    const storyEngine = useStoryEngine();
    const persistence = usePersistence({
       worldModel,
@@ -65,10 +67,21 @@ const App: React.FC = () => {
       currentTimeSetting,
    } = worldModel;
 
-   // --- World Admin Analysis Integration ---
-   const [isInboxOpen, setIsInboxOpen] = useState(false);
-   const [inboxEntities, setInboxEntities] = useState<SocialEntity[]>([]);
-   const [isAnalyzing, setIsAnalyzing] = useState(false);
+   // 用户确认后的实体写回
+   const handleAddEntitiesFromTask = (taskId: string, entities: SocialEntity[]) => {
+      entities.forEach(entity => {
+         worldModel.handleAddEntity(entity.name, entity.description, entity.category);
+      });
+      taskManager.removeTask(taskId);
+      showToast(`已写入 ${entities.length} 个实体`, 'success');
+   };
+
+   // --- Task Manager Integration ---
+
+
+   // Removed old Inbox State (lifted to taskManager)
+   // const [isInboxOpen, setIsInboxOpen] = useState(false);
+   // const [inboxEntities, setInboxEntities] = useState<SocialEntity[]>([]);
 
    // Toast State
    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -77,24 +90,67 @@ const App: React.FC = () => {
       setToast({ message, type });
    };
 
-   const handleRequestAnalysis = async (text: string) => {
-      console.log("App: handleRequestAnalysis called", text);
-      setIsAnalyzing(true);
-      showToast("正在后台分析文本... 请稍候", 'info');
+   const handleRequestAnalysis = async (text: string, action: 'analyze' | 'explain' | 'expand' = 'analyze') => {
+      console.log("App: handleRequestAnalysis called", text, action);
 
-      try {
-         const results = await extractEntitiesFromSnippet(text, model.entities, apiSettings);
-         if (results.length > 0) {
-            setInboxEntities(prev => [...prev, ...results]);
-            showToast(`分析完成！已生成 ${results.length} 个新实体，请查看收件箱`, 'success');
-         } else {
-            showToast("分析完成，但未能从文本中提取到有效实体。", 'info');
+      let taskId = '';
+
+      if (action === 'analyze') {
+         taskId = taskManager.addTask('analysis', '文本社会解剖', '正在从选中文本中提取社会实体...', undefined, { text });
+         showToast("正在后台分析文本... 请稍候", 'info');
+
+         try {
+            taskManager.updateTask(taskId, { status: 'running', progress: 10 });
+            const results = await extractEntitiesFromSnippet(text, model.entities, apiSettings);
+
+            if (results.length > 0) {
+               taskManager.completeTask(taskId, { summary: `提取了 ${results.length} 个新实体`, data: results });
+               showToast(`分析完成！已生成 ${results.length} 个新实体`, 'success');
+            } else {
+               taskManager.completeTask(taskId, { summary: "未提取到有效实体" });
+               showToast("分析完成，但未能从文本中提取到有效实体。", 'info');
+            }
+         } catch (e: any) {
+            console.error("Analysis failed", e);
+            taskManager.failTask(taskId, e.message);
+            showToast("分析失败: " + e.message, 'error');
          }
-      } catch (e: any) {
-         console.error("Analysis failed", e);
-         showToast("分析失败: " + e.message, 'error');
-      } finally {
-         setIsAnalyzing(false);
+      }
+      else if (action === 'explain') {
+         // Create a chat task or similar?
+         // For now, let's creating a 'custom' task that simulates an explanation request.
+         // Ideally we should use the Brainstorm service but independent of session?
+         // Or just create a task with the explanation as the result.
+         taskId = taskManager.addTask('custom', '文本智能解释', '正在解释选中的文本...', undefined, { text });
+         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+
+         // Mock Implementation for now or use sendChatMessage simple?
+         // We don't have a simple "askOneOff" service exposed easily without session.
+         // Let's just create a task that encourages user to go to Brainstorm?
+         // OR better: Create a Brainstorm session?
+
+         // Actually, let's use the `sendChatMessage` service if imported.
+         // But `sendChatMessage` needs messages array.
+
+         // Let's defer actual AI implementation for 'explain'/'expand' to next step or use a mock delay for UX demo.
+         setTimeout(() => {
+            taskManager.completeTask(taskId, {
+               summary: "解释完成 (Demo)",
+               // In real impl, this would be the LLM response
+               error: "AI 解释功能即将上线... (目前仅演示 UI)"
+            });
+         }, 1500);
+      }
+      else if (action === 'expand') {
+         taskId = taskManager.addTask('custom', '文本智能扩写', '正在基于选中文本进行扩写...', undefined, { text });
+         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+
+         setTimeout(() => {
+            taskManager.completeTask(taskId, {
+               summary: "扩写完成 (Demo)",
+               error: "AI 扩写功能即将上线... (目前仅演示 UI)"
+            });
+         }, 1500);
       }
    };
 
@@ -106,22 +162,7 @@ const App: React.FC = () => {
 
          {persistence.isGeneratingWorld && <WorldGenerationOverlay status={persistence.generationStatus} />}
 
-         <WorldAdminDialog
-            isOpen={isInboxOpen}
-            onClose={() => setIsInboxOpen(false)}
-            inboxEntities={inboxEntities}
-            onAddEntities={(entitiesToAdd) => {
-               // Add to world
-               entitiesToAdd.forEach(e => worldModel.handleAddEntity(e.name, e.description, e.category));
-               // Remove from inbox
-               const addedIds = new Set(entitiesToAdd.map(e => e.id));
-               setInboxEntities(prev => prev.filter(e => !addedIds.has(e.id)));
-            }}
-            onDiscardEntities={(idsToRemove) => {
-               setInboxEntities(prev => prev.filter(e => !idsToRemove.has(e.id)));
-            }}
-            apiSettings={apiSettings}
-         />
+
 
          <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
             <div className="flex items-center gap-2">
@@ -164,27 +205,40 @@ const App: React.FC = () => {
                </button>
             </div>
 
-            <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World)</p>}
-
+            {/* CORE APPS (AI Tasks & Brainstorm) */}
+            <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'} space-y-1`}>
                <button
-                  onClick={() => { setIsInboxOpen(true); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isInboxOpen ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''} relative`}
-                  title={isMinimalUI ? "收件箱" : undefined}
+                  onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'tasks' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''} relative`}
+                  title={isMinimalUI ? "AI 任务列表" : undefined}
                >
                   <Inbox className="w-4 h-4" />
-                  {!isMinimalUI && "收件箱"}
-                  {inboxEntities.length > 0 && (
-                     <span className="absolute right-2 top-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full min-w-[16px] text-center">
-                        {inboxEntities.length}
+                  {!isMinimalUI && "AI 任务列表"}
+                  {taskManager.tasks.some(t => t.status === 'running') && (
+                     <span className="absolute right-2 top-2 bg-indigo-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                        运行中
                      </span>
                   )}
-                  {isAnalyzing && (
-                     <span className="absolute right-2 top-2 bg-indigo-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
-                        ...
+                  {!isMinimalUI && taskManager.tasks.filter(t => t.status === 'completed').length > 0 && (
+                     <span className="bg-green-500 text-white text-[10px] px-1.5 rounded-full ml-auto">
+                        {taskManager.tasks.filter(t => t.status === 'completed').length}
                      </span>
                   )}
                </button>
+
+               <button
+                  onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                  title={isMinimalUI ? "头脑风暴" : undefined}
+               >
+                  <MessageCircle className="w-4 h-4" />
+                  {!isMinimalUI && "头脑风暴"}
+               </button>
+            </div>
+
+            {/* WORLD ENGINE SECTION */}
+            <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'} space-y-1`}>
+               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World Engine)</p>}
 
                <button
                   onClick={() => { setActiveTab('participants'); setIsMobileMenuOpen(false); }}
@@ -196,12 +250,21 @@ const App: React.FC = () => {
                </button>
 
                <button
+                  onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                  title={isMinimalUI ? "人物卡管理" : undefined}
+               >
+                  <User className="w-4 h-4" />
+                  {!isMinimalUI && "人物卡管理"}
+               </button>
+
+               <button
                   onClick={() => { setActiveTab('timeline'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'timeline' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "时间轴视图" : undefined}
+                  title={isMinimalUI ? "时间轴" : undefined}
                >
                   <Activity className="w-4 h-4" />
-                  {!isMinimalUI && "时间轴视图"}
+                  {!isMinimalUI && "时间轴"}
                </button>
 
                <button
@@ -216,49 +279,32 @@ const App: React.FC = () => {
                <button
                   onClick={() => { setActiveTab('chronicle'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'chronicle' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "史书视图" : undefined}
+                  title={isMinimalUI ? "编年史" : undefined}
                >
                   <BookText className="w-4 h-4" />
-                  {!isMinimalUI && "史书视图"}
+                  {!isMinimalUI && "编年史"}
                </button>
             </div>
 
-            <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事构建 (Story)</p>}
-
-               <button
-                  onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "头脑风暴" : undefined}
-               >
-                  <MessageCircle className="w-4 h-4" />
-                  {!isMinimalUI && "头脑风暴"}
-               </button>
-
-               <button
-                  onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "人物卡管理" : undefined}
-               >
-                  <User className="w-4 h-4" />
-                  {!isMinimalUI && "人物卡管理"}
-               </button>
+            {/* STORY ENGINE SECTION */}
+            <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'} space-y-1`}>
+               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">故事引擎 (Story Engine)</p>}
 
                <button
                   onClick={() => { setActiveTab('story'); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'story' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                  title={isMinimalUI ? "故事引擎" : undefined}
+                  title={isMinimalUI ? "故事生成" : undefined}
                >
                   <BookOpen className="w-4 h-4" />
-                  {!isMinimalUI && "故事引擎"}
+                  {!isMinimalUI && "故事生成"}
                </button>
             </div>
 
-            <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
-               {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">数据管理</p>}
+            {/* DATA */}
+            <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'} space-y-1`}>
                <button
                   onClick={() => { persistence.setShowSaveModal(true); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ${isMinimalUI ? 'justify-center px-0' : ''}`}
                   title={isMinimalUI ? "保存当前世界" : undefined}
                >
                   <Save className="w-4 h-4" />
@@ -266,7 +312,7 @@ const App: React.FC = () => {
                </button>
                <button
                   onClick={() => { persistence.handleLoadWorldList(); persistence.setShowLoadModal(true); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 py-2 text-sm hover:text-white transition-colors ${isMinimalUI ? 'justify-center px-0' : 'px-3'}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ${isMinimalUI ? 'justify-center px-0' : ''}`}
                   title={isMinimalUI ? "加载存档" : undefined}
                >
                   <FolderOpen className="w-4 h-4" />
@@ -274,7 +320,8 @@ const App: React.FC = () => {
                </button>
             </div>
 
-            <div className={`p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
+            {/* BOTTOM SETTINGS */}
+            <div className={`mt-auto p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
                <button
                   onClick={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
                   className={`flex items-center gap-3 text-slate-400 hover:text-white transition-colors text-sm ${isMinimalUI ? 'justify-center' : ''}`}
@@ -333,6 +380,16 @@ const App: React.FC = () => {
 
             {/* View Container */}
             <div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50">
+               {activeTab === 'tasks' && (
+                  <TaskListView
+                     tasks={taskManager.tasks}
+                     onClearCompleted={taskManager.clearCompleted}
+                     onRemoveTask={taskManager.removeTask}
+                     onAddEntities={handleAddEntitiesFromTask}
+                     onUpdateTask={taskManager.updateTask}
+                  />
+               )}
+
                {activeTab === 'participants' && (
                   <ParticipantsView
                      model={worldModel.model}
@@ -421,7 +478,7 @@ const App: React.FC = () => {
                         onRemoveStorySegment={worldModel.handleRemoveStorySegment}
 
                         // Analysis
-                        onAnalysisRequest={handleRequestAnalysis}
+                        onAnalysisRequest={(text, action) => handleRequestAnalysis(text, action)}
 
                         // Lifted State Methods
                         storyGuidance={storyEngine.storyGuidance}
@@ -438,6 +495,7 @@ const App: React.FC = () => {
                         onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
                         artifacts={storyEngine.artifacts}
                         onUpdateArtifacts={storyEngine.setArtifacts}
+                        taskManager={taskManager}
                      />
                   )
                }
@@ -447,6 +505,7 @@ const App: React.FC = () => {
                      <BrainstormView
                         globalApiSettings={apiSettings}
                         onAnalysisRequest={handleRequestAnalysis}
+                        taskManager={taskManager}
                      />
                   )
                }
