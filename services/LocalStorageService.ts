@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { WorldData, GitChange, GitLog } from '../types';
 
-// The backend runs on port 5001 (as configured in server.js)
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use relative path to leverage Vite proxy and axios default headers
+const API_BASE_URL = '/api';
 
 // ===== Project API Functions =====
 
@@ -27,9 +27,11 @@ export const createProject = async (worldData: WorldData): Promise<string> => {
     try {
         const response = await axios.post<{ project: { id: string } }>(`${API_BASE_URL}/projects`, worldData);
         return response.data.project.id;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error creating project:", error);
-        throw error;
+        // Extract error message from axios response
+        const message = error.response?.data?.error || error.message || '未知错误';
+        throw new Error(message);
     }
 };
 
@@ -57,9 +59,10 @@ export const saveProject = async (worldData: WorldData): Promise<string> => {
 
         await axios.put<{ success: boolean }>(`${API_BASE_URL}/projects/${worldData.id}`, worldData);
         return worldData.id;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving project:", error);
-        throw error;
+        const message = error.response?.data?.error || error.message || '未知错误';
+        throw new Error(message);
     }
 };
 
@@ -136,8 +139,7 @@ export const saveWorld = async (worldData: WorldData): Promise<string> => {
     try {
         // If it's a new world without ID, create it
         if (!worldData.id) {
-            // Generate a temporary ID for the creation
-            worldData.id = crypto.randomUUID();
+            // Let backend generate the ID
             return await createProject(worldData);
         }
 

@@ -820,17 +820,18 @@ ${contextText}
                 )}
 
                 {viewMode === 'artifact' && (
-                    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
-                        {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
-                            <ArtifactEditor
-                                artifact={artifacts.find(a => a.id === activeArtifactId)!}
-                                onUpdate={(content) => {
-                                    onUpdateArtifacts(artifacts.map(a => a.id === activeArtifactId ? { ...a, content } : a));
-                                }}
-                                onClose={() => setViewMode('segment')}
-                            />
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-slate-400">
+                <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+                    {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
+                        <ArtifactEditor
+                            artifact={artifacts.find(a => a.id === activeArtifactId)!}
+                            onUpdate={(content) => {
+                                onUpdateArtifacts(artifacts.map(a => a.id === activeArtifactId ? { ...a, content } : a));
+                            }}
+                            onClose={() => setViewMode('segment')}
+                            onAnalysisRequest={onAnalysisRequest}
+                        />
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-slate-400">
                                 <p>Select an artifact to view</p>
                             </div>
                         )}
@@ -846,7 +847,8 @@ const ArtifactEditor: React.FC<{
     artifact: StoryArtifact;
     onUpdate: (content: string) => void;
     onClose: () => void;
-}> = ({ artifact, onUpdate, onClose }) => {
+    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
+}> = ({ artifact, onUpdate, onClose, onAnalysisRequest }) => {
     const [content, setContent] = useState(artifact.content);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
 
@@ -904,6 +906,7 @@ const ArtifactEditor: React.FC<{
                     <MilkdownEditor
                         content={content}
                         onChange={(val) => setContent(val)}
+                        onAnalysisRequest={onAnalysisRequest}
                     />
                 </div>
             </div>

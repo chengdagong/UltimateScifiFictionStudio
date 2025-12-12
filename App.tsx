@@ -22,6 +22,7 @@ import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
 import { StatusBar } from './components/StatusBar';
 import TaskListView from './components/TaskListView';
 import { Toast, ToastType } from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Hooks
 import { useApiSettings } from './hooks/useApiSettings';
@@ -49,6 +50,7 @@ const DashboardContent: React.FC = () => {
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [newWorldName, setNewWorldName] = useState("新世界");
+   const [createWorldError, setCreateWorldError] = useState<string>("");
 
    const { user, logout } = useAuth();
 
@@ -123,43 +125,74 @@ const DashboardContent: React.FC = () => {
    };
 
    // Wrappers for world creation that apply the name
-   const handleCreateEmptyWithName = () => {
+   const handleCreateEmptyWithName = async () => {
+      setCreateWorldError("");
       if (!newWorldName.trim()) {
-         alert("请输入世界名称");
+         setCreateWorldError("请输入世界名称");
          return;
       }
+      
+      // Refresh world list to check for conflicts
+      await persistence.handleLoadWorldList();
+      
       if (isNameConflict(newWorldName)) {
-         alert("该名称已存在，请使用其他名称");
+         setCreateWorldError("该名称已存在，请使用其他名称");
          return;
       }
-      persistence.handleCreateEmptyWorld();
-      persistence.setWorldName(newWorldName);
+      
+      try {
+         await persistence.handleCreateEmptyWorld(newWorldName);
+         setCreateWorldError("");
+         setNewWorldName("新世界");
+      } catch (error: any) {
+         setCreateWorldError(error.message || "创建失败，请重试");
+      }
    };
 
-   const handleImportWithName = (text: string) => {
+   const handleImportWithName = async (text: string) => {
+      setCreateWorldError("");
       if (!newWorldName.trim()) {
-         alert("请输入世界名称");
+         setCreateWorldError("请输入世界名称");
          return;
       }
+      
+      await persistence.handleLoadWorldList();
+      
       if (isNameConflict(newWorldName)) {
-         alert("该名称已存在，请使用其他名称");
+         setCreateWorldError("该名称已存在，请使用其他名称");
          return;
       }
-      persistence.handleImportWorld(text);
-      persistence.setWorldName(newWorldName);
+      
+      try {
+         await persistence.handleImportWorld(text, newWorldName);
+         setCreateWorldError("");
+         setNewWorldName("新世界");
+      } catch (error: any) {
+         setCreateWorldError(error.message || "导入失败，请重试");
+      }
    };
 
-   const handleApplyPresetWithName = (preset: any) => {
+   const handleApplyPresetWithName = async (preset: any) => {
+      setCreateWorldError("");
       if (!newWorldName.trim()) {
-         alert("请输入世界名称");
+         setCreateWorldError("请输入世界名称");
          return;
       }
+      
+      await persistence.handleLoadWorldList();
+      
       if (isNameConflict(newWorldName)) {
-         alert("该名称已存在，请使用其他名称");
+         setCreateWorldError("该名称已存在，请使用其他名称");
          return;
       }
-      persistence.handleApplyPreset(preset);
-      persistence.setWorldName(newWorldName);
+      
+      try {
+         await persistence.handleApplyPreset(preset, newWorldName);
+         setCreateWorldError("");
+         setNewWorldName("新世界");
+      } catch (error: any) {
+         setCreateWorldError(error.message || "创建失败，请重试");
+      }
    };
 
    const handleRequestAnalysis = async (text: string, action: 'analyze' | 'explain' | 'expand' = 'analyze') => {
@@ -442,9 +475,9 @@ const DashboardContent: React.FC = () => {
                      <div>
                         <h2 className="text-lg font-serif font-bold text-slate-800">{persistence.worldName}</h2>
                         <div className="flex items-center gap-2 text-xs text-slate-400">
-                           <span>{worldModel.model.entities.length} {t('label_entities')}</span>
+                           <span>{worldModel.model?.entities?.length ?? 0} {t('label_entities')}</span>
                            <span>•</span>
-                           <span>{worldModel.storySegments.length} {t('label_chapters')}</span>
+                           <span>{worldModel.storySegments?.length ?? 0} {t('label_chapters')}</span>
                         </div>
                      </div>
                   </div>
@@ -676,7 +709,11 @@ const DashboardContent: React.FC = () => {
                   <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
                      <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
                         <h2 className="text-xl font-bold text-slate-800">{t('modal_new_world_title')}</h2>
-                        <button onClick={() => persistence.setShowNewWorldModal(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
+                        <button onClick={() => {
+                           persistence.setShowNewWorldModal(false);
+                           setCreateWorldError("");
+                           if (!persistence.currentWorldId) setShowWelcomeModal(true);
+                        }} className="text-slate-400 hover:text-slate-600"><X /></button>
                      </div>
 
                      <div className="flex border-b border-slate-100 shrink-0">
@@ -716,19 +753,25 @@ const DashboardContent: React.FC = () => {
                                  <input
                                     type="text"
                                     value={newWorldName}
-                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    onChange={(e) => {
+                                       setNewWorldName(e.target.value);
+                                       setCreateWorldError("");
+                                    }}
                                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                     placeholder="输入世界名称..."
                                  />
-                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
-                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 {createWorldError && (
+                                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                                       <span>⚠️</span>
+                                       <span>{createWorldError}</span>
+                                    </p>
                                  )}
                               </div>
 
                               <div className="text-center">
                                  <button
                                     onClick={handleCreateEmptyWithName}
-                                    disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                    disabled={!newWorldName.trim()}
                                     className="mt-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                  >
                                     {t('action_create_now')}
@@ -744,12 +787,18 @@ const DashboardContent: React.FC = () => {
                                  <input
                                     type="text"
                                     value={newWorldName}
-                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    onChange={(e) => {
+                                       setNewWorldName(e.target.value);
+                                       setCreateWorldError("");
+                                    }}
                                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                     placeholder="输入世界名称..."
                                  />
-                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
-                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 {createWorldError && (
+                                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                                       <span>⚠️</span>
+                                       <span>{createWorldError}</span>
+                                    </p>
                                  )}
                               </div>
 
@@ -759,7 +808,7 @@ const DashboardContent: React.FC = () => {
                                     <button
                                        key={preset.id}
                                        onClick={() => handleApplyPresetWithName(preset)}
-                                       disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                       disabled={!newWorldName.trim()}
                                        className="flex flex-col text-left p-4 border border-slate-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-transparent"
                                     >
                                        <div className="flex justify-between items-start mb-2">
@@ -779,12 +828,18 @@ const DashboardContent: React.FC = () => {
                                  <input
                                     type="text"
                                     value={newWorldName}
-                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    onChange={(e) => {
+                                       setNewWorldName(e.target.value);
+                                       setCreateWorldError("");
+                                    }}
                                     className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                     placeholder="输入世界名称..."
                                  />
-                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
-                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 {createWorldError && (
+                                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                                       <span>⚠️</span>
+                                       <span>{createWorldError}</span>
+                                    </p>
                                  )}
                               </div>
 
@@ -801,7 +856,7 @@ const DashboardContent: React.FC = () => {
                               <div className="flex justify-end">
                                  <button
                                     onClick={() => handleImportWithName(importText)}
-                                    disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                    disabled={!newWorldName.trim()}
                                     className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                  >
                                     {t('action_start_analysis')}
@@ -844,7 +899,10 @@ const DashboardContent: React.FC = () => {
                   <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
                      <div className="p-4 border-b flex justify-between items-center">
                         <h3 className="font-bold text-lg">{t('modal_load_world_title')}</h3>
-                        <button onClick={() => persistence.setShowLoadModal(false)}><X className="w-5 h-5 text-slate-400" /></button>
+                        <button onClick={() => {
+                           persistence.setShowLoadModal(false);
+                           if (!persistence.currentWorldId) setShowWelcomeModal(true);
+                        }}><X className="w-5 h-5 text-slate-400" /></button>
                      </div>
                      <div className="flex-1 overflow-y-auto p-2">
                         {persistence.isLoadingWorlds ? (
