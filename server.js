@@ -336,56 +336,6 @@ const server = http.createServer((req, res) => {
 
             checkFile(0);
         });
-    } else if (req.url === '/auth/github' && req.method === 'GET') {
-        const client_id = process.env.GITHUB_CLIENT_ID;
-
-        if (!client_id || client_id === 'your_client_id_here') {
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end('<h1>GitHub OAuth not configured</h1>');
-            return;
-        }
-
-        const redirect_uri = 'http://localhost:5001/auth/github/callback';
-        const scope = 'repo';
-
-        const authUrl = `https://github.com/login/oauth/authorize?client_id=${client_id}&redirect_uri=${redirect_uri}&scope=${scope}`;
-        res.writeHead(302, { Location: authUrl });
-        res.end();
-    } else if (req.url.startsWith('/auth/github/callback') && req.method === 'GET') {
-        const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
-        const code = urlParams.get('code');
-
-        if (!code) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Missing code parameter' }));
-            return;
-        }
-
-        const client_id = process.env.GITHUB_CLIENT_ID;
-        const client_secret = process.env.GITHUB_CLIENT_SECRET;
-
-        axios.post('https://github.com/login/oauth/access_token', {
-            client_id,
-            client_secret,
-            code
-        }, {
-            headers: { Accept: 'application/json' }
-        })
-            .then(response => {
-                const accessToken = response.data.access_token;
-                if (accessToken) {
-                    res.writeHead(302, { Location: `http://localhost:3200?token=${accessToken}` });
-                    res.end();
-                } else {
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Failed to obtain access token' }));
-                }
-            })
-            .catch(err => {
-                console.error('OAuth Error:', err);
-                res.writeHead(500);
-                res.end();
-            });
     } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not Found' }));

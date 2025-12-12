@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle } from 'lucide-react';
+import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle, Inbox } from 'lucide-react';
+import { extractEntitiesFromSnippet } from './services/geminiService';
+import { SocialEntity } from './types';
 
 
 // Components
@@ -17,6 +19,8 @@ import { StatusBar } from './components/StatusBar';
 import { GitHubConnectModal } from './components/GitHubConnectModal';
 import { RepoSelectionModal } from './components/RepoSelectionModal';
 import { BranchManagementModal } from './components/BranchManagementModal';
+import TaskListView from './components/TaskListView';
+import { Toast, ToastType } from './components/Toast';
 
 import { useGitHub } from './components/GitHubContext';
 
@@ -25,6 +29,7 @@ import { useApiSettings } from './hooks/useApiSettings';
 import { useWorldModel } from './hooks/useWorldModel';
 import { useStoryEngine } from './hooks/useStoryEngine';
 import { usePersistence } from './hooks/usePersistence';
+import { useAiTaskManager } from './hooks/useAiTaskManager';
 
 // Constants
 import { WORLD_PRESETS } from './constants/presets';
@@ -32,7 +37,7 @@ import { FRAMEWORKS } from './constants/frameworks';
 
 const App: React.FC = () => {
    // App UI State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm'>('participants');
+   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks'>('participants');
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [newWorldTab, setNewWorldTab] = useState<'empty' | 'presets' | 'import'>('empty');
    const [importText, setImportText] = useState("");
@@ -76,7 +81,8 @@ const App: React.FC = () => {
 
    const isMinimalUI = apiSettings.minimalUI;
 
-   const worldModel = useWorldModel(apiSettings, checkApiKey);
+   const taskManager = useAiTaskManager(); // Init Task Manager
+   const worldModel = useWorldModel(apiSettings, checkApiKey, taskManager);
    const storyEngine = useStoryEngine();
    const persistence = usePersistence({
       worldModel,
@@ -94,8 +100,74 @@ const App: React.FC = () => {
       worldContext,
       currentTimeSetting,
    } = worldModel;
-   // Wait, worldName is in persistence hook, NOT worldModel.
-   // I need to destructure carefully.
+
+   // 用户确认后的实体写回
+   const handleAddEntitiesFromTask = (taskId: string, entities: SocialEntity[]) => {
+      entities.forEach(entity => {
+         worldModel.handleAddEntity(entity.name, entity.description, entity.category);
+      });
+      taskManager.removeTask(taskId);
+      showToast(`已写入 ${entities.length} 个实体`, 'success');
+   };
+
+   // --- Task Manager Integration ---
+
+   // Toast State
+   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+   const showToast = (message: string, type: ToastType = 'info') => {
+      setToast({ message, type });
+   };
+
+   const handleRequestAnalysis = async (text: string, action: 'analyze' | 'explain' | 'expand' = 'analyze') => {
+      console.log("App: handleRequestAnalysis called", text, action);
+
+      let taskId = '';
+
+      if (action === 'analyze') {
+         taskId = taskManager.addTask('analysis', '文本社会解剖', '正在从选中文本中提取社会实体...', undefined, { text });
+         showToast("正在后台分析文本... 请稍候", 'info');
+
+         try {
+            taskManager.updateTask(taskId, { status: 'running', progress: 10 });
+            const results = await extractEntitiesFromSnippet(text, model.entities, apiSettings);
+
+            if (results.length > 0) {
+               taskManager.completeTask(taskId, { summary: `提取了 ${results.length} 个新实体`, data: results });
+               showToast(`分析完成！已生成 ${results.length} 个新实体`, 'success');
+            } else {
+               taskManager.completeTask(taskId, { summary: "未提取到有效实体" });
+               showToast("分析完成，但未能从文本中提取到有效实体。", 'info');
+            }
+         } catch (e: any) {
+            console.error("Analysis failed", e);
+            taskManager.failTask(taskId, e.message);
+            showToast("分析失败: " + e.message, 'error');
+         }
+      }
+      else if (action === 'explain') {
+         taskId = taskManager.addTask('custom', '文本智能解释', '正在解释选中的文本...', undefined, { text });
+         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+
+         setTimeout(() => {
+            taskManager.completeTask(taskId, {
+               summary: "解释完成 (Demo)",
+               error: "AI 解释功能即将上线... (目前仅演示 UI)"
+            });
+         }, 1500);
+      }
+      else if (action === 'expand') {
+         taskId = taskManager.addTask('custom', '文本智能扩写', '正在基于选中文本进行扩写...', undefined, { text });
+         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+
+         setTimeout(() => {
+            taskManager.completeTask(taskId, {
+               summary: "扩写完成 (Demo)",
+               error: "AI 扩写功能即将上线... (目前仅演示 UI)"
+            });
+         }, 1500);
+      }
+   };
 
    return (
       <div className="flex flex-col h-screen bg-slate-100 text-slate-800 font-sans overflow-hidden">
@@ -150,6 +222,38 @@ const App: React.FC = () => {
                   </button>
                </div>
 
+               {/* CORE APPS (AI Tasks & Brainstorm) */}
+               <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'} space-y-1`}>
+                  <button
+                     onClick={() => { setActiveTab('tasks'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'tasks' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''} relative`}
+                     title={isMinimalUI ? t('nav_tasks') : undefined}
+                  >
+                     <Inbox className="w-4 h-4" />
+                     {!isMinimalUI && t('nav_tasks')}
+                     {taskManager.tasks.some(t => t.status === 'running') && (
+                        <span className="absolute right-2 top-2 bg-indigo-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                           {t('status_running')}
+                        </span>
+                     )}
+                     {!isMinimalUI && taskManager.tasks.filter(t => t.status === 'completed').length > 0 && (
+                        <span className="bg-green-500 text-white text-[10px] px-1.5 rounded-full ml-auto">
+                           {taskManager.tasks.filter(t => t.status === 'completed').length}
+                        </span>
+                     )}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? t('nav_brainstorm') : undefined}
+                  >
+                     <MessageCircle className="w-4 h-4" />
+                     {!isMinimalUI && t('nav_brainstorm')}
+                  </button>
+               </div>
+
+               {/* WORLD ENGINE SECTION */}
                <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
                   {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_world')}</p>}
 
@@ -160,6 +264,15 @@ const App: React.FC = () => {
                   >
                      <Network className="w-4 h-4" />
                      {!isMinimalUI && t('nav_participants')}
+                  </button>
+
+                  <button
+                     onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
+                     title={isMinimalUI ? t('nav_characters') : undefined}
+                  >
+                     <User className="w-4 h-4" />
+                     {!isMinimalUI && t('nav_characters')}
                   </button>
 
                   <button
@@ -190,26 +303,9 @@ const App: React.FC = () => {
                   </button>
                </div>
 
+               {/* STORY ENGINE SECTION */}
                <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>
                   {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_story')}</p>}
-
-                  <button
-                     onClick={() => { setActiveTab('brainstorm'); setIsMobileMenuOpen(false); }}
-                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'brainstorm' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                     title={isMinimalUI ? t('nav_brainstorm') : undefined}
-                  >
-                     <MessageCircle className="w-4 h-4" />
-                     {!isMinimalUI && t('nav_brainstorm')}
-                  </button>
-
-                  <button
-                     onClick={() => { setActiveTab('characters'); setIsMobileMenuOpen(false); }}
-                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeTab === 'characters' ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''}`}
-                     title={isMinimalUI ? t('nav_characters') : undefined}
-                  >
-                     <User className="w-4 h-4" />
-                     {!isMinimalUI && t('nav_characters')}
-                  </button>
 
                   <button
                      onClick={() => { setActiveTab('story'); setIsMobileMenuOpen(false); }}
@@ -221,6 +317,7 @@ const App: React.FC = () => {
                   </button>
                </div>
 
+               {/* DATA */}
                <div className={`mt-8 ${isMinimalUI ? '' : 'px-3'}`}>
                   {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_data')}</p>}
                   <button
@@ -251,7 +348,7 @@ const App: React.FC = () => {
                   </button>
                </div>
 
-               <div className={`p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
+               <div className={`mt-auto p-4 border-t border-slate-800 ${isMinimalUI ? 'flex flex-col gap-4 items-center' : 'flex items-center justify-between'}`}>
                   <button
                      onClick={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
                      className={`flex items-center gap-3 text-slate-400 hover:text-white transition-colors text-sm ${isMinimalUI ? 'justify-center' : ''}`}
@@ -289,9 +386,9 @@ const App: React.FC = () => {
                      <div>
                         <h2 className="text-lg font-serif font-bold text-slate-800">{persistence.worldName}</h2>
                         <div className="flex items-center gap-2 text-xs text-slate-400">
-                           <span>{worldModel.model.entities.length} 个实体</span>
+                           <span>{worldModel.model.entities.length} {t('label_entities')}</span>
                            <span>•</span>
-                           <span>{worldModel.storySegments.length} 个章节</span>
+                           <span>{worldModel.storySegments.length} {t('label_chapters')}</span>
                         </div>
                      </div>
                   </div>
@@ -300,10 +397,10 @@ const App: React.FC = () => {
                      {/* Auto Save Status */}
                      <div className="hidden lg:flex items-center gap-2 text-[10px] text-slate-400 mr-2">
                         {persistence.isAutoSaving ? (
-                           <><Loader2 className="w-3 h-3 animate-spin" /> 保存本地中...</>
+                           <><Loader2 className="w-3 h-3 animate-spin" /> {t('status_saving_local')}</>
                         ) : (
-                           <span title={`上次自动保存: ${new Date(persistence.lastAutoSaveTime).toLocaleTimeString()}`}>
-                              本地已备份
+                           <span title={`${t('label_last_auto_save')}: ${new Date(persistence.lastAutoSaveTime).toLocaleTimeString()}`}>
+                              {t('status_local_backup')}
                            </span>
                         )}
                      </div>
@@ -312,10 +409,10 @@ const App: React.FC = () => {
                         onClick={persistence.handleSaveWorld}
                         disabled={persistence.isSaving}
                         className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors border border-slate-200 rounded-lg hover:border-indigo-300 bg-white"
-                        title="提交并推送到 GitHub (Commit & Push)"
+                        title={t('action_sync_cloud')}
                      >
                         {persistence.isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        <span>同步云端</span>
+                        <span>{t('action_sync_cloud')}</span>
                      </button>
                      <div className="h-6 w-px bg-slate-200"></div>
                      <button
@@ -324,13 +421,23 @@ const App: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
                      >
                         {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        <span>刷新状态</span>
+                        <span>{t('action_refresh_status')}</span>
                      </button>
                   </div>
                </header >
 
                {/* View Container */}
                < div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50" >
+                  {activeTab === 'tasks' && (
+                     <TaskListView
+                        tasks={taskManager.tasks}
+                        onClearCompleted={taskManager.clearCompleted}
+                        onRemoveTask={taskManager.removeTask}
+                        onAddEntities={handleAddEntitiesFromTask}
+                        onUpdateTask={taskManager.updateTask}
+                     />
+                  )}
+
                   {activeTab === 'participants' && (
                      <ParticipantsView
                         model={worldModel.model}
@@ -418,6 +525,9 @@ const App: React.FC = () => {
                            onUpdateStorySegment={worldModel.handleUpdateStorySegment}
                            onRemoveStorySegment={worldModel.handleRemoveStorySegment}
 
+                           // Analysis
+                           onAnalysisRequest={(text, action) => handleRequestAnalysis(text, action)}
+
                            // Lifted State Methods
                            storyGuidance={storyEngine.storyGuidance}
                            onUpdateStoryGuidance={storyEngine.setStoryGuidance}
@@ -433,13 +543,28 @@ const App: React.FC = () => {
                            onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
                            artifacts={storyEngine.artifacts}
                            onUpdateArtifacts={storyEngine.setArtifacts}
+                           taskManager={taskManager}
                         />
                      )
                   }
 
                   {
                      activeTab === 'brainstorm' && (
-                        <BrainstormView globalApiSettings={apiSettings} />
+                        <BrainstormView
+                           globalApiSettings={apiSettings}
+                           onAnalysisRequest={handleRequestAnalysis}
+                           taskManager={taskManager}
+                        />
+                     )
+                  }
+
+                  {
+                     toast && (
+                        <Toast
+                           message={toast.message}
+                           type={toast.type}
+                           onClose={() => setToast(null)}
+                        />
                      )
                   }
                </div >

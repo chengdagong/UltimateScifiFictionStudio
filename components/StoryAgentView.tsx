@@ -44,6 +44,8 @@ interface StoryAgentViewProps {
     // Artifacts State
     artifacts: StoryArtifact[];
     onUpdateArtifacts: (val: StoryArtifact[]) => void;
+    onAnalysisRequest?: (text: string) => void;
+    taskManager?: any; // Use weak type for now or import ReturnType. Ideally import Hook return type.
 }
 
 // REMOVED: DEFAULT_AGENTS moved inside component for i18n
@@ -58,7 +60,9 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     executionLogs, onUpdateExecutionLogs,
     stepOutputs, onUpdateStepOutputs,
     generatedDraft, onUpdateGeneratedDraft,
-    artifacts, onUpdateArtifacts
+    artifacts, onUpdateArtifacts,
+    onAnalysisRequest,
+    taskManager
 }) => {
     const { t } = useTranslation();
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
@@ -142,6 +146,12 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             [step.id]: { status: 'generating', content: '', attempts: [] }
         }));
 
+        let taskId = "";
+        if (taskManager) {
+            taskId = taskManager.addTask('story_step', `执行步骤: ${step.name}`, step.instruction, undefined, { stepId: step.id });
+            taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+        }
+
         try {
             let currentRound = 1;
             let isApproved = false;
@@ -217,6 +227,10 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
             onUpdateArtifacts([...artifacts, newArtifact]);
 
+            if (taskId && taskManager) {
+                taskManager.completeTask(taskId, { summary: '步骤执行完成', data: content });
+            }
+
             // Trigger Notification
             setLatestArtifact(newArtifact);
             // Auto-dismiss after 5 seconds
@@ -231,6 +245,11 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 ...prev,
                 [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
             }));
+
+            if (taskId && taskManager) {
+                taskManager.failTask(taskId, e.message);
+            }
+
             onUpdateWorkflowStatus('paused'); // Allow retry?
             alert(`Step Failed: ${e.message}`);
         }
@@ -773,6 +792,7 @@ ${contextText}
                                                 <MilkdownEditor
                                                     content={output}
                                                     onChange={(val) => onUpdateStepOutputs(prev => ({ ...prev, [step.id]: val }))}
+                                                    onAnalysisRequest={onAnalysisRequest}
                                                 />
                                             </div>
                                         </div>

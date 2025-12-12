@@ -814,3 +814,62 @@ export const generateCharacterProfile = async (
     };
   }
 };
+
+export const extractEntitiesFromSnippet = async (
+  snippet: string,
+  existingEntities: SocialEntity[],
+  settings: ApiSettings
+): Promise<SocialEntity[]> => {
+  // Minimize context to save tokens, just names/cats to avoid duplicates or provide hints
+  const contextSnippet = existingEntities
+    .slice(0, 50)
+    .map(e => `${e.name} (${e.category})`)
+    .join(", ");
+
+  const prompt = `
+    任务: 你是社会解剖学家。请分析以下文本片段，提取其中潜在的"社会解剖学对象" (Social Anatomy Objects)。
+    
+    【文本片段】
+    "${snippet}"
+    
+    【已存在实体 (仅供参考，避免重复)】
+    ${contextSnippet || "无"}
+    
+    【提取要求】:
+    1. 识别文中提到的人物、组织、地点、重要物品(资源/技术)、事件或信仰概念。
+    2. 如果实体已经存在于【已存在实体】中，**不要**再次提取，除非文中有新的重要描述。
+    3. 为每个实体分配最合适的类别 (person, org, place, event, tech, resource, belief)。
+    4. 生成简短但切中要害的描述 (Description)，解释其在当前语境下的社会功能或意义。
+    5. 语言要求：如果输入文本主要为中文，则所有输出字段（name, description）必须使用简体中文。
+    
+    输出严格的 JSON 数组:
+    [
+      { "name": "...", "category": "...", "description": "..." }
+    ]
+  `;
+
+  try {
+    const rawText = await generateText(settings, prompt, true);
+
+    let data: any[] = [];
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/) || rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (jsonMatch) data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    }
+
+    if (!Array.isArray(data)) return [];
+
+    return data.map((item) => ({
+      id: crypto.randomUUID(),
+      name: item.name,
+      description: item.description,
+      category: item.category as EntityCategory || EntityCategory.UNKNOWN
+    }));
+
+  } catch (error: any) {
+    handleApiError(error);
+    return [];
+  }
+};
