@@ -1,58 +1,174 @@
 import axios from 'axios';
-import { WorldData } from '../types';
+import { WorldData, GitChange, GitLog } from '../types';
 
 // The backend runs on port 5001 (as configured in server.js)
 const API_BASE_URL = 'http://localhost:5001/api';
 
-export const saveWorld = async (worldData: WorldData): Promise<string> => {
-    try {
-        // If it's a new world without ID, generate one
-        if (!worldData.id) {
-            worldData.id = crypto.randomUUID();
-        }
+// ===== Project API Functions =====
 
-        const response = await axios.post<{ id: string, success: true }>(`${API_BASE_URL}/worlds`, worldData);
-        if (response.data.success) {
-            return response.data.id || worldData.id;
-        } else {
-            throw new Error('Server returned unsuccessful status');
-        }
-    } catch (error) {
-        console.error("Error saving world locally:", error);
-        throw error;
-    }
-};
-
-export const getWorlds = async (): Promise<WorldData[]> => {
+/**
+ * Get all projects for the authenticated user
+ */
+export const getProjects = async (): Promise<WorldData[]> => {
     try {
-        const response = await axios.get<WorldData[]>(`${API_BASE_URL}/worlds`);
+        const response = await axios.get<WorldData[]>(`${API_BASE_URL}/projects`);
         return response.data;
     } catch (error) {
-        console.error("Error fetching worlds locally:", error);
+        console.error("Error fetching projects:", error);
         // Return empty array if backend is down or empty, so app doesn't crash
         return [];
     }
 };
 
-export const getWorldById = async (id: string): Promise<WorldData | null> => {
-    // Current implementation of GET /api/worlds returns all.
-    // We can implement client-side filter or add specific endpoint.
-    // For now, let's fetch all and find. 
-    // Optimization Todo: Implement GET /api/worlds/:id in backend if list is large.
+/**
+ * Create a new project
+ */
+export const createProject = async (name: string, frameworkId: string): Promise<string> => {
     try {
-        const worlds = await getWorlds();
-        return worlds.find(w => w.id === id) || null;
+        const response = await axios.post<{ id: string }>(`${API_BASE_URL}/projects`, {
+            name,
+            frameworkId
+        });
+        return response.data.id;
     } catch (error) {
-        console.error("Error fetching world by ID:", error);
+        console.error("Error creating project:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get a specific project by ID
+ */
+export const getProject = async (id: string): Promise<WorldData | null> => {
+    try {
+        const response = await axios.get<WorldData>(`${API_BASE_URL}/projects/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching project by ID:", error);
         return null;
     }
 };
 
-export const deleteWorld = async (id: string): Promise<void> => {
+/**
+ * Save/update an existing project
+ */
+export const saveProject = async (worldData: WorldData): Promise<string> => {
     try {
-        await axios.delete(`${API_BASE_URL}/worlds/${id}`);
+        if (!worldData.id) {
+            throw new Error('Project ID is required for saving');
+        }
+
+        const response = await axios.put<{ id: string }>(`${API_BASE_URL}/projects/${worldData.id}`, worldData);
+        return response.data.id;
     } catch (error) {
-        console.error("Error deleting world locally:", error);
+        console.error("Error saving project:", error);
         throw error;
     }
+};
+
+/**
+ * Delete a project
+ */
+export const deleteProject = async (id: string): Promise<void> => {
+    try {
+        await axios.delete(`${API_BASE_URL}/projects/${id}`);
+    } catch (error) {
+        console.error("Error deleting project:", error);
+        throw error;
+    }
+};
+
+// ===== Project-Level Git Operations =====
+
+/**
+ * Initialize Git repository for a project
+ */
+export const initProjectGit = async (projectId: string): Promise<void> => {
+    try {
+        await axios.post(`${API_BASE_URL}/projects/${projectId}/git/init`);
+    } catch (error) {
+        console.error("Error initializing project Git:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get Git status for a project
+ */
+export const getProjectGitStatus = async (projectId: string): Promise<GitChange[]> => {
+    try {
+        const response = await axios.get<{ changes: GitChange[] }>(`${API_BASE_URL}/projects/${projectId}/git/status`);
+        return response.data.changes || [];
+    } catch (error) {
+        console.error("Error getting project Git status:", error);
+        return [];
+    }
+};
+
+/**
+ * Commit changes in a project
+ */
+export const commitProject = async (projectId: string, message: string): Promise<void> => {
+    try {
+        await axios.post(`${API_BASE_URL}/projects/${projectId}/git/commit`, { message });
+    } catch (error) {
+        console.error("Error committing project:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get Git log for a project
+ */
+export const getProjectGitLog = async (projectId: string): Promise<GitLog[]> => {
+    try {
+        const response = await axios.get<{ logs: GitLog[] }>(`${API_BASE_URL}/projects/${projectId}/git/log`);
+        return response.data.logs || [];
+    } catch (error) {
+        console.error("Error getting project Git log:", error);
+        return [];
+    }
+};
+
+// ===== Legacy API Functions (Backward Compatibility) =====
+
+/**
+ * @deprecated Use saveProject instead
+ */
+export const saveWorld = async (worldData: WorldData): Promise<string> => {
+    try {
+        // If it's a new world without ID, create it
+        if (!worldData.id) {
+            // Generate a temporary ID for the creation
+            worldData.id = crypto.randomUUID();
+            return await createProject(worldData.name, worldData.frameworkId);
+        }
+
+        // Otherwise, update existing project
+        return await saveProject(worldData);
+    } catch (error) {
+        console.error("Error saving world (legacy):", error);
+        throw error;
+    }
+};
+
+/**
+ * @deprecated Use getProjects instead
+ */
+export const getWorlds = async (): Promise<WorldData[]> => {
+    return await getProjects();
+};
+
+/**
+ * @deprecated Use getProject instead
+ */
+export const getWorldById = async (id: string): Promise<WorldData | null> => {
+    return await getProject(id);
+};
+
+/**
+ * @deprecated Use deleteProject instead
+ */
+export const deleteWorld = async (id: string): Promise<void> => {
+    return await deleteProject(id);
 };

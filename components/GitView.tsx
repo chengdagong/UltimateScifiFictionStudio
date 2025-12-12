@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { GitBranch, GitCommit, GitPullRequest, History, Play, AlertCircle, CheckCircle } from 'lucide-react';
+import { initProjectGit, getProjectGitStatus, commitProject, getProjectGitLog } from '../services/LocalStorageService';
 
 interface GitChange {
     status: string;
@@ -14,7 +14,11 @@ interface GitLog {
     date: string;
 }
 
-export const GitView: React.FC = () => {
+interface GitViewProps {
+    projectId: string | undefined;
+}
+
+export const GitView: React.FC<GitViewProps> = ({ projectId }) => {
     const [changes, setChanges] = useState<GitChange[]>([]);
     const [logs, setLogs] = useState<GitLog[]>([]);
     const [commitMessage, setCommitMessage] = useState('');
@@ -23,9 +27,10 @@ export const GitView: React.FC = () => {
     const [isRepo, setIsRepo] = useState(true);
 
     const fetchStatus = async () => {
+        if (!projectId) return;
         try {
-            const res = await axios.get('/api/git/status');
-            setChanges(res.data.changes || []);
+            const changes = await getProjectGitStatus(projectId);
+            setChanges(changes);
             setIsRepo(true);
         } catch (err) {
             setIsRepo(false);
@@ -33,47 +38,62 @@ export const GitView: React.FC = () => {
     };
 
     const fetchLog = async () => {
+        if (!projectId) return;
         try {
-            const res = await axios.get('/api/git/log');
-            setLogs(res.data.logs || []);
+            const logs = await getProjectGitLog(projectId);
+            setLogs(logs);
         } catch (err) {
             // Ignore if not repo
         }
     };
 
     const handleInit = async () => {
+        if (!projectId) return;
         setLoading(true);
         try {
-            await axios.post('/api/git/init');
+            await initProjectGit(projectId);
             setIsRepo(true);
             fetchStatus();
             fetchLog();
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Init failed');
+            setError(err.message || 'Init failed');
         } finally {
             setLoading(false);
         }
     };
 
     const handleCommit = async () => {
-        if (!commitMessage) return;
+        if (!commitMessage || !projectId) return;
         setLoading(true);
         try {
-            await axios.post('/api/git/commit', { message: commitMessage });
+            await commitProject(projectId, commitMessage);
             setCommitMessage('');
             fetchStatus();
             fetchLog();
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Commit failed');
+            setError(err.message || 'Commit failed');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchStatus();
-        fetchLog();
-    }, []);
+        if (projectId) {
+            fetchStatus();
+            fetchLog();
+        }
+    }, [projectId]);
+
+    // 当没有选中项目时显示提示
+    if (!projectId) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                <GitBranch className="w-16 h-16 mb-4 text-slate-300" />
+                <h3 className="text-xl font-bold text-slate-700">请先选择或创建一个项目</h3>
+                <p className="mb-6 text-center">在使用版本控制功能之前，您需要先选择或创建一个项目。</p>
+            </div>
+        );
+    }
 
     if (!isRepo) {
         return (

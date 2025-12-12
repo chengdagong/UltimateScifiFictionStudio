@@ -608,7 +608,7 @@ const DashboardContent: React.FC = () => {
 
                   {
                      activeTab === 'git' && (
-                        <GitView />
+                        <GitView projectId={persistence.currentWorldId} />
                      )
                   }
                </div >

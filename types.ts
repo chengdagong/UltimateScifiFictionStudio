@@ -196,3 +196,17 @@ export interface StepExecutionLog {
   }[];
   error?: string;
 }
+
+// --- Git Types ---
+
+export interface GitChange {
+  status: string;
+  path: string;
+}
+
+export interface GitLog {
+  hash: string;
+  author: string;
+  message: string;
+  date: string;
+}
