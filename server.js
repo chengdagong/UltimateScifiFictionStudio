@@ -676,7 +676,7 @@ const server = http.createServer(async (req, res) => {
 
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const projectData = JSON.parse(body);
                 if (!projectData.name) {
@@ -700,6 +700,30 @@ const server = http.createServer(async (req, res) => {
 
                 // Initialize files with slug as ID
                 const projectMeta = initializeProjectFiles(projectDir, projectData, slug);
+
+                // Auto-initialize Git repository for the project
+                try {
+                    await execAsync('git init', { cwd: projectDir });
+                    
+                    // Create .gitignore
+                    const gitignoreContent = `# Temporary files
+*.tmp
+*.bak
+.DS_Store
+
+# Editor lock files
+*.lock
+
+# Log files
+*.log
+`;
+                    fs.writeFileSync(path.join(projectDir, '.gitignore'), gitignoreContent);
+                    
+                    console.log(`[POST /api/projects] Git repository initialized for project: ${slug}`);
+                } catch (gitErr) {
+                    console.warn(`[POST /api/projects] Failed to initialize Git for project ${slug}:`, gitErr);
+                    // Don't fail project creation if Git init fails
+                }
 
                 res.writeHead(201, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, project: projectMeta }));
