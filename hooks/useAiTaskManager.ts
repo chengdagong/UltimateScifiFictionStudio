@@ -1,24 +1,36 @@
 import { useState, useCallback, useEffect } from 'react';
 import { AiTask, AiTaskStatus, AiTaskType, AiTaskResult } from '../types/taskTypes';
 
-export const useAiTaskManager = () => {
-    const [tasks, setTasks] = useState<AiTask[]>(() => {
+export const useAiTaskManager = (worldId?: string) => {
+    const [tasks, setTasks] = useState<AiTask[]>([]);
+
+    // Init loading specific to world
+    useEffect(() => {
+        if (!worldId) {
+            setTasks([]); // Start fresh for unsaved worlds
+            return;
+        }
         try {
-            const saved = localStorage.getItem('ecoNarrative_tasks');
-            return saved ? JSON.parse(saved) : [];
+            const saved = localStorage.getItem(`ecoNarrative_tasks_${worldId}`);
+            if (saved) {
+                setTasks(JSON.parse(saved));
+            } else {
+                setTasks([]);
+            }
         } catch (e) {
             console.error("Failed to load tasks", e);
-            return [];
+            setTasks([]);
         }
-    });
+    }, [worldId]);
 
     useEffect(() => {
+        if (!worldId) return; // Don't persist unsaved world tasks
         try {
-            localStorage.setItem('ecoNarrative_tasks', JSON.stringify(tasks));
+            localStorage.setItem(`ecoNarrative_tasks_${worldId}`, JSON.stringify(tasks));
         } catch (e) {
             console.error("Failed to save tasks", e);
         }
-    }, [tasks]);
+    }, [tasks, worldId]);
 
     const addTask = useCallback((
         type: AiTaskType,
@@ -81,6 +93,15 @@ export const useAiTaskManager = () => {
         setTasks(prev => prev.filter(t => t.status !== 'completed' && t.status !== 'failed'));
     }, []);
 
+    const resetTasks = useCallback(() => {
+        setTasks([]);
+        if (worldId) {
+            try {
+                localStorage.removeItem(`ecoNarrative_tasks_${worldId}`);
+            } catch (e) { console.error(e); }
+        }
+    }, [worldId]);
+
     return {
         tasks,
         addTask,
@@ -88,6 +109,7 @@ export const useAiTaskManager = () => {
         completeTask,
         failTask,
         removeTask,
-        clearCompleted
+        clearCompleted,
+        resetTasks
     };
 };
