@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 // import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
-import { saveWorld, getWorlds, deleteWorld, commitProject } from '../services/LocalStorageService';
+import { saveProject, createProject, getProjects, deleteProject, commitProject } from '../services/LocalStorageService';
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
@@ -55,7 +55,9 @@ export const usePersistence = ({
         refetch: refetchWorldList
     } = useQuery({
         queryKey: ['worlds'],
-        queryFn: getWorlds,
+        queryFn: getProjects,
+        // Only fetch when user is authenticated
+        enabled: !!user,
         // Don't refetch automatically on window focus to avoid screen jumping if user is editing
         refetchOnWindowFocus: false
     });
@@ -83,8 +85,11 @@ export const usePersistence = ({
     const autoSaveMutation = useMutation({
         mutationFn: async (data: WorldData) => {
             if (!data.name) return;
-            // Only save to Firebase (or Local DB)
-            return await saveWorld(data);
+            // Auto-save should always have an ID (project must exist)
+            if (!data.id) {
+                throw new Error('Cannot auto-save without project ID');
+            }
+            return await saveProject(data);
         },
         onSuccess: (savedId) => {
             if (!currentWorldId && savedId) {
@@ -94,10 +99,15 @@ export const usePersistence = ({
             setLastAutoSaveTime(Date.now());
             // We don't necessarily invalidate queries on every auto-save to avoid UI flicker,
             // but we might want to update the list occasionally.
-            // queryClient.invalidateQueries({ queryKey: ['worlds'] }); 
+            // queryClient.invalidateQueries({ queryKey: ['worlds'] });
         },
-        onError: (e) => {
+        onError: (e: any) => {
             console.warn("Auto-save failed:", e);
+            // If project not found, clear the ID so next save creates a new project
+            if (e?.message?.includes('Project not found')) {
+                console.warn("Project not found, clearing currentWorldId");
+                setCurrentWorldId(undefined);
+            }
         }
     });
 
@@ -105,8 +115,11 @@ export const usePersistence = ({
     const saveMutation = useMutation({
         mutationFn: async (data: WorldData) => {
             if (!data.name) throw new Error("请输入世界名称");
-            // Just save locally
-            return await saveWorld(data);
+            // If no ID, create new project; otherwise update existing
+            if (!data.id) {
+                return await createProject(data);
+            }
+            return await saveProject(data);
         },
         onSuccess: (savedId) => {
             setCurrentWorldId(savedId);
@@ -145,6 +158,9 @@ export const usePersistence = ({
 
         // Prevent auto-save if unnamed (user must name their world)
         if (!worldName) return;
+        
+        // Prevent auto-save if no currentWorldId (project doesn't exist yet)
+        if (!currentWorldId) return;
 
         const timer = setTimeout(() => {
             if (!autoSaveMutation.isPending && !saveMutation.isPending) {
@@ -171,7 +187,7 @@ export const usePersistence = ({
 
     // 5. Delete World Mutation
     const deleteMutation = useMutation({
-        mutationFn: deleteWorld,
+        mutationFn: deleteProject,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
         },
@@ -183,16 +199,39 @@ export const usePersistence = ({
 
     // 6. Create Empty World Mutation
     const createEmptyMutation = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (name: string) => {
             setGenerationStatus(`正在初始化新世界...`);
-            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // Construct initial empty world data (without ID - let backend generate it)
+            const newWorld: WorldData = {
+                id: undefined,
+                name: name,
+                frameworkId: 'general',
+                createdAt: Date.now(),
+                lastModified: Date.now(),
+                context: '',
+                model: { entities: [], relationships: [], entityStates: [], technologies: [], techDependencies: [] },
+                storySegments: [],
+                currentTimeSetting: '',
+                chronicleText: '',
+                agents: storyEngine.agents,
+                workflow: storyEngine.workflow,
+                artifacts: []
+            };
+
+            // Save to backend - createProject returns the new ID
+            const newId = await createProject(newWorld);
+            return { ...newWorld, id: newId };
         },
-        onSuccess: () => {
+        onSuccess: (newWorld) => {
             worldModel.resetModel(INITIAL_CONTEXTS['general']);
             storyEngine.resetStoryEngine();
-            // storyEngine.resetStoryEngine() already clears artifacts
-            setCurrentWorldId(undefined);
-            setWorldName(""); // User must provide a name before saving
+            
+            setCurrentWorldId(newWorld.id);
+            setWorldName(newWorld.name);
+            
+            queryClient.invalidateQueries({ queryKey: ['worlds'] });
+            
             setActiveTab('participants');
             setShowNewWorldModal(false);
         }
@@ -200,78 +239,111 @@ export const usePersistence = ({
 
     // 7. Import World Mutation
     const importMutation = useMutation({
-        mutationFn: async (importText: string) => {
+        mutationFn: async ({ importText, name }: { importText: string; name: string }) => {
             setGenerationStatus("正在深度分析文本架构...");
-            return await importWorldFromText(importText, apiSettings);
-        },
-        onSuccess: (result, importText) => {
-            // Intermediate UI update
-            setGenerationStatus("正在生成实体网络...");
-
-            worldModel.setWorldContext(result.context);
-            worldModel.setModel({
-                entities: result.entities,
-                relationships: result.relationships,
-                entityStates: result.entityStates || [],
-                technologies: result.technologies || [],
-                techDependencies: result.techDependencies || []
-            });
-            setWorldName(""); // User must provide a name before saving
-
-            // Use extracted story segments if available, otherwise fallback to raw text
-            if (result.storySegments && result.storySegments.length > 0) {
-                worldModel.setStorySegments(result.storySegments);
-            } else {
-                worldModel.setStorySegments([{
+            const result = await importWorldFromText(importText, apiSettings);
+            
+            // Construct and save (without ID - let backend generate it)
+            const newWorld: WorldData = {
+                id: undefined,
+                name: name,
+                frameworkId: 'general',
+                createdAt: Date.now(),
+                lastModified: Date.now(),
+                context: result.context,
+                model: {
+                    entities: result.entities,
+                    relationships: result.relationships,
+                    entityStates: result.entityStates || [],
+                    technologies: result.technologies || [],
+                    techDependencies: result.techDependencies || []
+                },
+                storySegments: result.storySegments && result.storySegments.length > 0 ? result.storySegments : [{
                     id: crypto.randomUUID(),
                     timestamp: "原始文本",
                     content: importText,
                     influencedBy: []
-                }]);
-            }
-            setActiveTab('story');
-            setCurrentWorldId(undefined);
+                }],
+                currentTimeSetting: '',
+                chronicleText: '',
+                agents: storyEngine.agents,
+                workflow: storyEngine.workflow,
+                artifacts: []
+            };
+
+            const newId = await createProject(newWorld);
+            return { ...newWorld, id: newId };
+        },
+        onSuccess: (newWorld) => {
+            setGenerationStatus("正在生成实体网络...");
+
+            worldModel.setWorldContext(newWorld.context);
+            worldModel.setModel(newWorld.model);
+            worldModel.setStorySegments(newWorld.storySegments);
+            
+            setWorldName(newWorld.name);
+            setCurrentWorldId(newWorld.id);
+            
             storyEngine.resetStoryEngine();
+            queryClient.invalidateQueries({ queryKey: ['worlds'] });
+            
+            setActiveTab('story');
             setShowNewWorldModal(false);
         },
         onError: (e: any) => {
             console.error(e);
-            alert("导入失败: " + e.message);
             setShowNewWorldModal(true);
         }
     });
 
     // 8. Apply Preset Mutation
     const presetMutation = useMutation({
-        mutationFn: async (preset: WorldPreset) => {
+        mutationFn: async ({ preset, name }: { preset: WorldPreset; name: string }) => {
             setGenerationStatus(`正在构建【${preset.name}】的历史背景...`);
             const framework = FRAMEWORKS[preset.frameworkId];
             const result = await generateWorldFromScenario(preset.scenarioPrompt, framework, apiSettings);
-            return { result, preset };
-        },
-        onSuccess: ({ result, preset }) => {
-            worldModel.resetModel(INITIAL_CONTEXTS[preset.frameworkId]);
-            storyEngine.resetStoryEngine();
-            setCurrentWorldId(undefined);
+            
+            const newWorld: WorldData = {
+                id: undefined,
+                name: name,
+                frameworkId: preset.frameworkId,
+                createdAt: Date.now(),
+                lastModified: Date.now(),
+                context: result.context,
+                model: {
+                    entities: result.entities,
+                    relationships: result.relationships,
+                    entityStates: result.entityStates,
+                    technologies: result.technologies || [],
+                    techDependencies: result.techDependencies || []
+                },
+                storySegments: result.storySegments || [],
+                currentTimeSetting: result.storySegments && result.storySegments.length > 0 ? result.storySegments[result.storySegments.length - 1].timestamp : '',
+                chronicleText: '',
+                agents: storyEngine.agents,
+                workflow: storyEngine.workflow,
+                artifacts: []
+            };
 
-            // Apply result
+            const newId = await createProject(newWorld);
+            return { ...newWorld, id: newId };
+        },
+        onSuccess: (newWorld) => {
+            worldModel.resetModel(INITIAL_CONTEXTS[newWorld.frameworkId]);
+            storyEngine.resetStoryEngine();
+            
             setGenerationStatus("正在完善社会关系与历史图谱...");
 
-            worldModel.setWorldContext(result.context);
-            worldModel.setModel({
-                entities: result.entities,
-                relationships: result.relationships,
-                entityStates: result.entityStates,
-                technologies: result.technologies || [],
-                techDependencies: result.techDependencies || []
-            });
+            worldModel.setWorldContext(newWorld.context);
+            worldModel.setModel(newWorld.model);
+            worldModel.setStorySegments(newWorld.storySegments);
+            worldModel.setCurrentTimeSetting(newWorld.currentTimeSetting);
 
-            if (result.storySegments && result.storySegments.length > 0) {
-                worldModel.setStorySegments(result.storySegments);
-                worldModel.setCurrentTimeSetting(result.storySegments[result.storySegments.length - 1].timestamp);
-            }
+            setWorldName(newWorld.name);
+            setCurrentWorldId(newWorld.id);
+            
+            queryClient.invalidateQueries({ queryKey: ['worlds'] });
 
-            setWorldName(preset.name);
             setActiveTab('timeline');
             setShowNewWorldModal(false);
         },
@@ -285,8 +357,8 @@ export const usePersistence = ({
 
     // --- Handlers (Adapters for UI) ---
 
-    const handleCreateEmptyWorld = () => {
-        createEmptyMutation.mutate();
+    const handleCreateEmptyWorld = (name: string) => {
+        createEmptyMutation.mutate(name);
     };
 
     const handleSaveLocal = () => {
@@ -302,15 +374,12 @@ export const usePersistence = ({
         commitMutation.mutate({ projectId: currentWorldId, message: commitMessage });
     };
 
-    const handleLoadWorldList = () => {
-        refetchWorldList();
+    const handleLoadWorldList = async () => {
+        await refetchWorldList();
     };
 
     const handleLoadWorld = (world: WorldData) => {
         setCurrentWorldId(world.id);
-        if (user && world.id) {
-            localStorage.setItem(`lastWorld_${user}`, world.id);
-        }
         setWorldName(world.name);
 
         worldModel.setModel(world.model || { entities: [], relationships: [], entityStates: [], technologies: [], techDependencies: [] });
@@ -337,34 +406,23 @@ export const usePersistence = ({
         deleteMutation.mutate(id);
     };
 
-    const handleImportWorld = (importText: string) => {
+    const handleImportWorld = (importText: string, name: string) => {
         if (!checkApiKey()) return;
         if (!importText.trim()) { alert("请输入需要分析的文本"); return; }
         setShowNewWorldModal(false);
-        importMutation.mutate(importText);
+        importMutation.mutate({ importText, name });
     };
 
-    const handleApplyPreset = (preset: WorldPreset) => {
+    const handleApplyPreset = (preset: WorldPreset, name: string) => {
         if (!checkApiKey()) return;
         setShowNewWorldModal(false);
-        presetMutation.mutate(preset);
+        presetMutation.mutate({ preset, name });
     };
 
     // Aggregated Loading State
     const isGeneratingWorld = createEmptyMutation.isPending || importMutation.isPending || presetMutation.isPending;
 
-    // Auto-load last world
-    useEffect(() => {
-        if (!isLoadingWorlds && savedWorlds.length > 0 && user && !currentWorldId) {
-            const lastId = localStorage.getItem(`lastWorld_${user}`);
-            if (lastId) {
-                const world = savedWorlds.find(w => w.id === lastId);
-                if (world) {
-                    handleLoadWorld(world);
-                }
-            }
-        }
-    }, [isLoadingWorlds, savedWorlds, user]); // Run once when worlds loaded
+    // No auto-load - user should manually select a project from the welcome screen
 
     return {
         // State

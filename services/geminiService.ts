@@ -116,6 +116,11 @@ const generateText = async (settings: ApiSettings, prompt: string, jsonMode: boo
 const handleApiError = (error: any) => {
   console.error("API Error:", error);
   const msg = error.message || JSON.stringify(error);
+
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("fetch failed")) {
+    throw new Error("网络请求失败。请检查您的网络连接、API Key 是否正确，或尝试在设置中配置 Base URL (代理地址)。");
+  }
+
   if (msg.includes("Region not supported") || msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
     throw new Error("API 错误: Region not supported。请在设置中配置反向代理 (Base URL)。");
   }

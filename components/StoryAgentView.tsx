@@ -44,26 +44,49 @@ interface StoryAgentViewProps {
     // Artifacts State
     artifacts: StoryArtifact[];
     onUpdateArtifacts: (val: StoryArtifact[]) => void;
-    onAnalysisRequest?: (text: string) => void;
+    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
     taskManager?: any; // Use weak type for now or import ReturnType. Ideally import Hook return type.
 }
 
 // REMOVED: DEFAULT_AGENTS moved inside component for i18n
 
 const StoryAgentView: React.FC<StoryAgentViewProps> = ({
-    agents, workflow, model, framework, worldContext, storySegments, settings, currentTimeSetting,
-    onUpdateAgents, onUpdateWorkflow, onAddStorySegment, onUpdateStorySegment, onRemoveStorySegment,
+    agents: agentsProp,
+    workflow: workflowProp,
+    model,
+    framework,
+    worldContext,
+    storySegments: storySegmentsProp,
+    settings,
+    currentTimeSetting,
+    onUpdateAgents,
+    onUpdateWorkflow,
+    onAddStorySegment,
+    onUpdateStorySegment,
+    onRemoveStorySegment,
     // De-structure new props
-    storyGuidance, onUpdateStoryGuidance,
-    workflowStatus, onUpdateWorkflowStatus,
-    currentStepIndex, onUpdateCurrentStepIndex,
-    executionLogs, onUpdateExecutionLogs,
-    stepOutputs, onUpdateStepOutputs,
-    generatedDraft, onUpdateGeneratedDraft,
-    artifacts, onUpdateArtifacts,
+    storyGuidance,
+    onUpdateStoryGuidance,
+    workflowStatus,
+    onUpdateWorkflowStatus,
+    currentStepIndex,
+    onUpdateCurrentStepIndex,
+    executionLogs,
+    onUpdateExecutionLogs,
+    stepOutputs,
+    onUpdateStepOutputs,
+    generatedDraft,
+    onUpdateGeneratedDraft,
+    artifacts: artifactsProp,
+    onUpdateArtifacts,
     onAnalysisRequest,
     taskManager
 }) => {
+    // 防御性处理：确保数组prop始终有默认值
+    const agents = agentsProp || [];
+    const workflow = workflowProp || [];
+    const storySegments = storySegmentsProp || [];
+    const artifacts = artifactsProp || [];
     const { t } = useTranslation();
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
@@ -820,17 +843,18 @@ ${contextText}
                 )}
 
                 {viewMode === 'artifact' && (
-                    <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
-                        {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
-                            <ArtifactEditor
-                                artifact={artifacts.find(a => a.id === activeArtifactId)!}
-                                onUpdate={(content) => {
-                                    onUpdateArtifacts(artifacts.map(a => a.id === activeArtifactId ? { ...a, content } : a));
-                                }}
-                                onClose={() => setViewMode('segment')}
-                            />
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-slate-400">
+                <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+                    {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
+                        <ArtifactEditor
+                            artifact={artifacts.find(a => a.id === activeArtifactId)!}
+                            onUpdate={(content) => {
+                                onUpdateArtifacts(artifacts.map(a => a.id === activeArtifactId ? { ...a, content } : a));
+                            }}
+                            onClose={() => setViewMode('segment')}
+                            onAnalysisRequest={onAnalysisRequest}
+                        />
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-slate-400">
                                 <p>Select an artifact to view</p>
                             </div>
                         )}
@@ -846,7 +870,8 @@ const ArtifactEditor: React.FC<{
     artifact: StoryArtifact;
     onUpdate: (content: string) => void;
     onClose: () => void;
-}> = ({ artifact, onUpdate, onClose }) => {
+    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
+}> = ({ artifact, onUpdate, onClose, onAnalysisRequest }) => {
     const [content, setContent] = useState(artifact.content);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
 
@@ -904,6 +929,7 @@ const ArtifactEditor: React.FC<{
                     <MilkdownEditor
                         content={content}
                         onChange={(val) => setContent(val)}
+                        onAnalysisRequest={onAnalysisRequest}
                     />
                 </div>
             </div>

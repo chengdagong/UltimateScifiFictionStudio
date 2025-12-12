@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Base64 } from 'js-base64';
 
 dotenv.config();
 
@@ -53,7 +54,7 @@ function generateSlug(name) {
     
     // If contains Chinese characters, use base64url encoding
     if (/[\u4e00-\u9fa5]/.test(slug)) {
-        slug = Buffer.from(name).toString('base64url').substring(0, 20);
+        slug = Base64.encodeURI(name).substring(0, 20);
     }
     
     return slug || 'untitled-project';
@@ -77,13 +78,13 @@ function createProjectStructure(projectDir) {
 }
 
 // Helper: Initialize project files
-function initializeProjectFiles(projectDir, projectData) {
+function initializeProjectFiles(projectDir, projectData, slug) {
     // project.json
     const projectMeta = {
         version: "2.0",
-        id: projectData.id || Date.now().toString(),
+        id: slug, // Use slug as ID to match directory name
         name: projectData.name,
-        slug: generateSlug(projectData.name),
+        slug: slug,
         frameworkId: projectData.frameworkId,
         currentTimeSetting: projectData.currentTimeSetting || '',
         createdAt: projectData.createdAt || Date.now(),
@@ -337,6 +338,9 @@ function readProjectData(projectDir) {
 
 // Helper: Update project files
 function updateProjectFiles(projectDir, worldData) {
+    console.log(`[updateProjectFiles] Starting update for project: ${worldData.name || 'Unknown'}`);
+    console.log(`[updateProjectFiles] worldData keys:`, Object.keys(worldData || {}));
+    
     // Update project.json lastModified
     const projectPath = path.join(projectDir, 'project.json');
     const projectMeta = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
@@ -359,12 +363,21 @@ function updateProjectFiles(projectDir, worldData) {
     );
     
     // Update world model files
+    const model = worldData.model || {};
+    console.log(`[updateProjectFiles] Model data:`, {
+        hasModel: !!worldData.model,
+        entitiesCount: (model.entities || []).length,
+        relationshipsCount: (model.relationships || []).length,
+        entityStatesCount: (model.entityStates || []).length,
+        technologiesCount: (model.technologies || []).length,
+        techDependenciesCount: (model.techDependencies || []).length
+    });
     fs.writeFileSync(
         path.join(projectDir, 'world', 'entities.json'),
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            entities: worldData.model.entities
+            entities: model.entities || []
         }, null, 2)
     );
     
@@ -373,7 +386,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            relationships: worldData.model.relationships
+            relationships: model.relationships || []
         }, null, 2)
     );
     
@@ -382,7 +395,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            entityStates: worldData.model.entityStates
+            entityStates: model.entityStates || []
         }, null, 2)
     );
     
@@ -391,7 +404,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            technologies: worldData.model.technologies
+            technologies: model.technologies || []
         }, null, 2)
     );
     
@@ -400,12 +413,16 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            dependencies: worldData.model.techDependencies
+            dependencies: model.techDependencies || []
         }, null, 2)
     );
     
     // Update stories
-    const segments = worldData.storySegments.map(seg => ({
+    console.log(`[updateProjectFiles] Story segments:`, {
+        hasStorySegments: !!worldData.storySegments,
+        segmentsCount: (worldData.storySegments || []).length
+    });
+    const segments = (worldData.storySegments || []).map(seg => ({
         id: seg.id,
         timestamp: seg.timestamp,
         influencedBy: seg.influencedBy,
@@ -429,7 +446,7 @@ function updateProjectFiles(projectDir, worldData) {
         });
     }
     
-    worldData.storySegments.forEach(seg => {
+    (worldData.storySegments || []).forEach(seg => {
         const frontmatter = `---
 id: ${seg.id}
 timestamp: ${seg.timestamp}
@@ -444,6 +461,10 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
     });
     
     // Update artifacts
+    console.log(`[updateProjectFiles] Artifacts:`, {
+        hasArtifacts: !!worldData.artifacts,
+        artifactsCount: (worldData.artifacts || []).length
+    });
     const artifacts = (worldData.artifacts || []).map(art => ({
         id: art.id,
         title: art.title,
@@ -484,7 +505,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            agents: worldData.agents
+            agents: worldData.agents || []
         }, null, 2)
     );
     
@@ -493,9 +514,11 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            steps: worldData.workflow
+            steps: worldData.workflow || []
         }, null, 2)
     );
+    
+    console.log(`[updateProjectFiles] Update completed successfully for project: ${worldData.name}`);
 }
 
 // Ensure data directories exist
@@ -653,7 +676,7 @@ const server = http.createServer(async (req, res) => {
 
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const projectData = JSON.parse(body);
                 if (!projectData.name) {
@@ -675,8 +698,32 @@ const server = http.createServer(async (req, res) => {
                 // Create directory structure
                 createProjectStructure(projectDir);
 
-                // Initialize files
-                const projectMeta = initializeProjectFiles(projectDir, projectData);
+                // Initialize files with slug as ID
+                const projectMeta = initializeProjectFiles(projectDir, projectData, slug);
+
+                // Auto-initialize Git repository for the project
+                try {
+                    await execAsync('git init', { cwd: projectDir });
+                    
+                    // Create .gitignore
+                    const gitignoreContent = `# Temporary files
+*.tmp
+*.bak
+.DS_Store
+
+# Editor lock files
+*.lock
+
+# Log files
+*.log
+`;
+                    fs.writeFileSync(path.join(projectDir, '.gitignore'), gitignoreContent);
+                    
+                    console.log(`[POST /api/projects] Git repository initialized for project: ${slug}`);
+                } catch (gitErr) {
+                    console.warn(`[POST /api/projects] Failed to initialize Git for project ${slug}:`, gitErr);
+                    // Don't fail project creation if Git init fails
+                }
 
                 res.writeHead(201, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, project: projectMeta }));
@@ -731,8 +778,11 @@ const server = http.createServer(async (req, res) => {
             try {
                 const projectId = req.url.split('/')[3];
                 const projectDir = path.join(__dirname, 'data', 'users', currentUser, 'projects', projectId);
+                
+                console.log(`[PUT /api/projects/${projectId}] Update request from user: ${currentUser}`);
 
                 if (!fs.existsSync(projectDir)) {
+                    console.error(`[PUT /api/projects/${projectId}] Project directory not found: ${projectDir}`);
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Project not found' }));
                     return;
@@ -741,9 +791,11 @@ const server = http.createServer(async (req, res) => {
                 const worldData = JSON.parse(body);
                 updateProjectFiles(projectDir, worldData);
 
+                console.log(`[PUT /api/projects/${projectId}] Update successful`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (e) {
+                console.error(`[PUT /api/projects] Error:`, e);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
             }

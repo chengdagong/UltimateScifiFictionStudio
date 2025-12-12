@@ -12,8 +12,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<string | null>(localStorage.getItem('user'));
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const [user, setUser] = useState<string | null>(() => {
+        return localStorage.getItem('user');
+    });
+    const [token, setToken] = useState<string | null>(() => {
+        const savedToken = localStorage.getItem('token');
+        // Immediately set axios header if token exists
+        if (savedToken) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+        }
+        return savedToken;
+    });
 
     useEffect(() => {
         if (token) {
@@ -32,6 +41,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [user, token]);
 
     const login = (username: string, newToken: string) => {
+        // 同步设置 axios header 和 localStorage，确保后续 API 调用立即生效
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        localStorage.setItem('token', newToken);
+        localStorage.setItem('user', username);
+        
+        // 然后更新 React 状态
         setUser(username);
         setToken(newToken);
     };
