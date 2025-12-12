@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Base64 } from 'js-base64';
 
 dotenv.config();
 
@@ -53,7 +54,7 @@ function generateSlug(name) {
     
     // If contains Chinese characters, use base64url encoding
     if (/[\u4e00-\u9fa5]/.test(slug)) {
-        slug = Buffer.from(name).toString('base64url').substring(0, 20);
+        slug = Base64.encodeURI(name).substring(0, 20);
     }
     
     return slug || 'untitled-project';
