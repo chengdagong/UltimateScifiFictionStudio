@@ -56,6 +56,8 @@ export const usePersistence = ({
     } = useQuery({
         queryKey: ['worlds'],
         queryFn: getWorlds,
+        // Only fetch when user is authenticated
+        enabled: !!user,
         // Don't refetch automatically on window focus to avoid screen jumping if user is editing
         refetchOnWindowFocus: false
     });
