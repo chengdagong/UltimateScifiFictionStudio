@@ -307,5 +307,17 @@
     "layer_placeholder_name_event": "事件名称",
     "layer_placeholder_name_entity": "实体名称",
     "layer_placeholder_desc": "描述...",
-    "layer_empty_msg": "本层级暂无符合类别的实体。"
+    "layer_empty_msg": "本层级暂无符合类别的实体。",
+    "nav_tasks": "AI 任务列表",
+    "label_entities": "个实体",
+    "label_chapters": "个章节",
+    "label_last_auto_save": "上次自动保存",
+    "status_local_backup": "本地已备份",
+    "status_saving_local": "保存本地中...",
+    "action_sync_cloud": "同步云端",
+    "action_refresh_status": "刷新状态",
+    "status_running": "运行中",
+    "brainstorm_task_name": "头脑风暴",
+    "brainstorm_task_desc": "正在与 AI 进行创意对话...",
+    "brainstorm_task_complete": "回复完成"
 }

@@ -307,5 +307,17 @@
     "layer_placeholder_name_event": "Event Name",
     "layer_placeholder_name_entity": "Entity Name",
     "layer_placeholder_desc": "Description...",
-    "layer_empty_msg": "No entities in this layer matching category."
+    "layer_empty_msg": "No entities in this layer matching category.",
+    "nav_tasks": "AI Tasks",
+    "label_entities": "Entities",
+    "label_chapters": "Chapters",
+    "label_last_auto_save": "Last auto save",
+    "status_local_backup": "Local backup ready",
+    "status_saving_local": "Saving locally...",
+    "action_sync_cloud": "Sync to Cloud",
+    "action_refresh_status": "Refresh Status",
+    "status_running": "Running",
+    "brainstorm_task_name": "Brainstorm",
+    "brainstorm_task_desc": "Having creative conversation with AI...",
+    "brainstorm_task_complete": "Reply completed"
 }
