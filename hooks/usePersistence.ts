@@ -150,6 +150,9 @@ export const usePersistence = ({
 
         // Prevent auto-save if unnamed (user must name their world)
         if (!worldName) return;
+        
+        // Prevent auto-save if no currentWorldId (project doesn't exist yet)
+        if (!currentWorldId) return;
 
         const timer = setTimeout(() => {
             if (!autoSaveMutation.isPending && !saveMutation.isPending) {
