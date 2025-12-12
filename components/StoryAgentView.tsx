@@ -795,42 +795,13 @@ ${contextText}
                 {viewMode === 'artifact' && (
                     <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
                         {activeArtifactId && artifacts.find(a => a.id === activeArtifactId) ? (
-                            (() => {
-                                const art = artifacts.find(a => a.id === activeArtifactId)!;
-                                return (
-                                    <div className="flex flex-col h-full animate-fadeIn">
-                                        {/* Artifact Header */}
-                                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
-                                            <div>
-                                                <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                                    {art.title}
-                                                </div>
-                                                <div className="text-xs text-slate-500 flex items-center gap-2 mt-1 uppercase">
-                                                    {art.type} • {new Date(art.createdAt).toLocaleString()}
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setViewMode('segment')} className="text-slate-400 hover:text-slate-600">
-                                                    <X className="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Artifact Content */}
-                                        <div className="flex-1 bg-slate-50 overflow-hidden relative">
-                                            <div className="absolute inset-0 pb-16">
-                                                <MilkdownEditor
-                                                    content={art.content}
-                                                    onChange={(val) => {
-                                                        // Update artifact content
-                                                        onUpdateArtifacts(artifacts.map(a => a.id === art.id ? { ...a, content: val } : a));
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()
+                            <ArtifactEditor
+                                artifact={artifacts.find(a => a.id === activeArtifactId)!}
+                                onUpdate={(content) => {
+                                    onUpdateArtifacts(artifacts.map(a => a.id === activeArtifactId ? { ...a, content } : a));
+                                }}
+                                onClose={() => setViewMode('segment')}
+                            />
                         ) : (
                             <div className="flex items-center justify-center h-full text-slate-400">
                                 <p>Select an artifact to view</p>
@@ -838,6 +809,76 @@ ${contextText}
                         )}
                     </div>
                 )}
+            </div>
+        </div>
+    );
+};
+
+// Sub-component for Artifact Editing with Save Status
+const ArtifactEditor: React.FC<{
+    artifact: StoryArtifact;
+    onUpdate: (content: string) => void;
+    onClose: () => void;
+}> = ({ artifact, onUpdate, onClose }) => {
+    const [content, setContent] = useState(artifact.content);
+    const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
+
+    // Sync local state when artifact ID changes
+    useEffect(() => {
+        setContent(artifact.content);
+        setSaveStatus('saved');
+    }, [artifact.id]);
+
+    const executeSave = React.useCallback(() => {
+        onUpdate(content);
+        setSaveStatus('saved');
+    }, [content, onUpdate]);
+
+    useEffect(() => {
+        if (content === artifact.content) {
+            setSaveStatus('saved');
+            return;
+        }
+        setSaveStatus('saving');
+        const timer = setTimeout(() => { executeSave(); }, 2000);
+        return () => clearTimeout(timer);
+    }, [content, artifact.content]);
+
+    return (
+        <div className="flex flex-col h-full animate-fadeIn">
+            {/* Artifact Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                <div>
+                    <div className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        {artifact.title}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs text-slate-500 uppercase flex items-center gap-1">
+                            {artifact.type} • {new Date(artifact.createdAt).toLocaleString()}
+                        </span>
+
+                        {/* Save Status Indicator */}
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1 border-l border-slate-200 pl-3">
+                            {saveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> 保存中...</>}
+                            {saveStatus === 'saved' && <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> 已保存</>}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
+            {/* Artifact Content */}
+            <div className="flex-1 bg-slate-50 overflow-hidden relative">
+                <div className="absolute inset-0 pb-16">
+                    <MilkdownEditor
+                        content={content}
+                        onChange={(val) => setContent(val)}
+                    />
+                </div>
             </div>
         </div>
     );

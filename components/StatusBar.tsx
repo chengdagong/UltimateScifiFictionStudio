@@ -4,10 +4,11 @@ import { useGitHub } from './GitHubContext';
 
 interface StatusBarProps {
     isOnline?: boolean;
+    onBranchClick?: () => void;
 }
 
-export const StatusBar: React.FC<StatusBarProps> = ({ isOnline = true }) => {
-    const { user, login, logout, isLoading, currentRepo } = useGitHub();
+export const StatusBar: React.FC<StatusBarProps> = ({ isOnline = true, onBranchClick }) => {
+    const { user, login, logout, isLoading, currentRepo, currentBranch } = useGitHub();
     const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
 
     const handleLogoutClick = () => {
@@ -34,24 +35,40 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isOnline = true }) => {
                     {isLoading ? (
                         <span className="text-slate-500">Checking GitHub status...</span>
                     ) : user ? (
-                        <button
-                            onClick={handleLogoutClick}
-                            className="flex items-center gap-1.5 text-green-400 font-medium hover:text-green-300 transition-colors"
-                            title="Click to Disconnect / Logout"
-                        >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <Github className="w-3.5 h-3.5" />
-                            <div className="flex items-center gap-1">
-                                <span>{user.login}</span>
-                                {currentRepo && (
-                                    <>
-                                        <span className="text-slate-600">/</span>
-                                        <span className="font-bold underline decoration-dotted underline-offset-2">{currentRepo}</span>
-                                    </>
-                                )}
-                            </div>
-                            <span className="text-xs text-slate-600 block ml-2">(Disconnect)</span>
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={onBranchClick}
+                                className="flex items-center gap-1.5 text-green-400 font-medium hover:text-green-300 transition-colors group"
+                                title="Manage Branches"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <Github className="w-3.5 h-3.5" />
+                                <div className="flex items-center gap-1">
+                                    <span>{user.login}</span>
+                                    {currentRepo && (
+                                        <>
+                                            <span className="text-slate-600">/</span>
+                                            <span className="font-bold underline decoration-dotted underline-offset-2 group-hover:text-white transition-colors">
+                                                {currentRepo}
+                                            </span>
+                                            <span className="text-slate-500 ml-1 font-mono bg-slate-800 px-1.5 rounded text-[10px]">
+                                                {currentBranch || 'main'}
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            </button>
+
+                            <div className="h-3 w-px bg-slate-700 mx-1"></div>
+
+                            <button
+                                onClick={handleLogoutClick}
+                                className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+                                title="Disconnect"
+                            >
+                                Disconnect
+                            </button>
+                        </div>
                     ) : (
                         <button
                             onClick={login}

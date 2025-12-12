@@ -12,6 +12,10 @@ interface GitHubContextType {
     listRepos: () => Promise<any[]>;
     createRepo: (name: string, description?: string) => Promise<any>;
     selectRepo: (name: string) => void;
+    currentBranch: string;
+    listBranches: () => Promise<any[]>;
+    createBranch: (name: string) => Promise<void>;
+    switchBranch: (name: string) => void;
 }
 
 const GitHubContext = createContext<GitHubContextType | undefined>(undefined);
@@ -22,6 +26,7 @@ export const GitHubProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [octokit, setOctokit] = useState<Octokit | null>(null);
     const [currentRepo, setCurrentRepo] = useState<string | null>(localStorage.getItem('github_repo'));
+    const [currentBranch, setCurrentBranch] = useState<string>(localStorage.getItem('github_branch') || 'main');
 
     useEffect(() => {
         // Check for token in URL (callback from backend)
@@ -65,7 +70,9 @@ export const GitHubProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setOctokit(null);
         localStorage.removeItem('github_token');
         localStorage.removeItem('github_repo');
+        localStorage.removeItem('github_branch');
         setCurrentRepo(null);
+        setCurrentBranch('main');
     };
 
     const listRepos = async () => {
@@ -103,8 +110,46 @@ export const GitHubProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         localStorage.setItem('github_repo', name);
     };
 
+    const listBranches = async () => {
+        if (!token || !currentRepo) return [];
+        const octokitInstance = new Octokit({ auth: token });
+        // Use raw octokit here or duplicate logic, simpler to use logic:
+        const { data } = await octokitInstance.rest.repos.listBranches({
+            owner: user.login,
+            repo: currentRepo,
+        });
+        return data;
+    };
+
+    const createBranch = async (name: string) => {
+        if (!token || !currentRepo) throw new Error("Not authenticated or repo not selected");
+        const octokitInstance = new Octokit({ auth: token });
+
+        // Get SHA of current branch head
+        const { data: refData } = await octokitInstance.rest.git.getRef({
+            owner: user.login,
+            repo: currentRepo,
+            ref: `heads/${currentBranch}`,
+        });
+        const sha = refData.object.sha;
+
+        await octokitInstance.rest.git.createRef({
+            owner: user.login,
+            repo: currentRepo,
+            ref: `refs/heads/${name}`,
+            sha,
+        });
+
+        switchBranch(name);
+    };
+
+    const switchBranch = (name: string) => {
+        setCurrentBranch(name);
+        localStorage.setItem('github_branch', name);
+    };
+
     return (
-        <GitHubContext.Provider value={{ token, user, isLoading, login, logout, octokit, currentRepo, listRepos, createRepo, selectRepo }}>
+        <GitHubContext.Provider value={{ token, user, isLoading, login, logout, octokit, currentRepo, listRepos, createRepo, selectRepo, currentBranch, listBranches, createBranch, switchBranch }}>
             {children}
         </GitHubContext.Provider>
     );

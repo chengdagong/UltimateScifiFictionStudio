@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
-import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
+// import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
+import { saveWorld, getWorlds, deleteWorld } from '../services/LocalStorageService';
 import { useGitHub } from '../components/GitHubContext';
 import { GitHubService } from '../services/GitHubService';
 import { useMemo } from 'react';
@@ -27,7 +28,7 @@ export const usePersistence = ({
     setActiveTab
 }: UsePersistenceProps) => {
     const queryClient = useQueryClient();
-    const { octokit, user: githubUser, currentRepo } = useGitHub();
+    const { octokit, user: githubUser, currentRepo, currentBranch } = useGitHub();
 
     const githubService = useMemo(() => {
         const service = octokit ? new GitHubService(octokit) : null;
@@ -40,6 +41,10 @@ export const usePersistence = ({
     // Persistence State
     const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
     const [worldName, setWorldName] = useState("新世界");
+
+    // Auto-save State
+    const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number>(Date.now());
+    const [isAutoSaving, setIsAutoSaving] = useState(false);
 
     // Generation Status State (shared for display)
     const [generationStatus, setGenerationStatus] = useState("正在初始化...");
@@ -63,60 +68,116 @@ export const usePersistence = ({
         refetchOnWindowFocus: false
     });
 
-    // 2. Save World Mutation
-    const saveMutation = useMutation({
-        mutationFn: async () => {
-            if (!worldName) throw new Error("请输入世界名称");
-            const worldData: WorldData = {
-                id: currentWorldId,
-                name: worldName,
-                frameworkId: 'general', // Defaulting as prior assumption
-                createdAt: Date.now(),
-                lastModified: Date.now(),
-                context: worldModel.worldContext,
-                model: worldModel.model,
-                storySegments: worldModel.storySegments,
-                currentTimeSetting: worldModel.currentTimeSetting,
-                chronicleText: worldModel.chronicleText,
-                agents: storyEngine.agents,
-                workflow: storyEngine.workflow,
-                artifacts: storyEngine.artifacts
+    // Helper: Construct World Data Object
+    const constructWorldData = (): WorldData => {
+        return {
+            id: currentWorldId,
+            name: worldName,
+            frameworkId: 'general', // Defaulting as prior assumption
+            createdAt: Date.now(),
+            lastModified: Date.now(),
+            context: worldModel.worldContext,
+            model: worldModel.model,
+            storySegments: worldModel.storySegments,
+            currentTimeSetting: worldModel.currentTimeSetting,
+            chronicleText: worldModel.chronicleText,
+            agents: storyEngine.agents,
+            workflow: storyEngine.workflow,
+            artifacts: storyEngine.artifacts
+        };
+    };
 
-            };
+    // 2. Auto Save Mutation (Local / Firebase Only)
+    const autoSaveMutation = useMutation({
+        mutationFn: async (data: WorldData) => {
+            if (!data.name) return;
+            // Only save to Firebase (or Local DB)
+            return await saveWorld(data);
+        },
+        onSuccess: (savedId) => {
+            if (!currentWorldId && savedId) {
+                // First save, set ID
+                setCurrentWorldId(savedId);
+            }
+            setLastAutoSaveTime(Date.now());
+            // We don't necessarily invalidate queries on every auto-save to avoid UI flicker,
+            // but we might want to update the list occasionally.
+            // queryClient.invalidateQueries({ queryKey: ['worlds'] }); 
+        },
+        onError: (e) => {
+            console.warn("Auto-save failed:", e);
+        }
+    });
 
-            // Save to GitHub if connected
+    // 3. Sync/Commit (GitHub + Local Snapshot) Mutation
+    const syncMutation = useMutation({
+        mutationFn: async (data: WorldData) => {
+            if (!data.name) throw new Error("请输入世界名称");
+
+            // 1. Save to GitHub if connected
             if (githubService && githubUser) {
-                try {
-                    console.log("Saving to GitHub...");
-                    await githubService.saveFile({
-                        path: `worlds/${worldName.replace(/\s+/g, '_')}.json`,
-                        content: JSON.stringify(worldData, null, 2),
-                        message: `Save world: ${worldName}`,
-                        branch: 'main' // Default to main for now
-                    });
-                    console.log("Saved to GitHub");
-                } catch (err) {
-                    console.error("Failed to save to GitHub:", err);
-                    // Don't block firebase save if github fails, but maybe notify user?
-                    // For now continuing.
-                }
+                console.log("Syncing to GitHub...");
+                await githubService.saveFile({
+                    path: `worlds/${data.name.replace(/\s+/g, '_')}.json`,
+                    content: JSON.stringify(data, null, 2),
+                    message: `Sync world: ${data.name} at ${new Date().toLocaleString()}`,
+                    branch: currentBranch || 'main'
+                });
+                console.log("Synced to GitHub");
+            } else {
+                throw new Error("未连接 GitHub，无法同步云端。但已保存到本地。");
             }
 
-            return await saveWorld(worldData);
+            // 2. Also ensure local DB is up to date
+            return await saveWorld(data);
         },
         onSuccess: (savedId) => {
             setCurrentWorldId(savedId);
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
             setShowSaveModal(false);
-            alert("保存成功！");
+            alert("同步云端成功 (Committed & Pushed)！");
         },
         onError: (e: any) => {
             console.error(e);
-            alert("保存失败: " + e.message);
+            // Even if GitHub fails, we might have saved locally? 
+            // The mutation function ensures GitHub goes first.
+            alert("同步失败: " + e.message);
         }
     });
 
-    // 3. Delete World Mutation
+    // --- Auto-Save Effect ---
+    // Trigger auto-save only when data changes (Debounced 2s)
+    useEffect(() => {
+        // Construct data snapshot inside effect to capture current state
+        const currentData = constructWorldData();
+
+        // Prevent auto-save if unnamed or during initialization
+        if (!worldName || worldName === "新世界") return;
+
+        const timer = setTimeout(() => {
+            if (!autoSaveMutation.isPending && !syncMutation.isPending) {
+                setIsAutoSaving(true);
+                autoSaveMutation.mutate(currentData, {
+                    onSettled: () => setIsAutoSaving(false)
+                });
+            }
+        }, 2000);
+
+        return () => clearTimeout(timer);
+    }, [
+        // Only run when these data values change
+        worldName,
+        worldModel.worldContext,
+        worldModel.model,
+        worldModel.storySegments,
+        worldModel.currentTimeSetting,
+        worldModel.chronicleText,
+        storyEngine.agents,
+        storyEngine.workflow,
+        storyEngine.artifacts
+    ]);
+
+    // 4. Delete World Mutation
     const deleteMutation = useMutation({
         mutationFn: deleteWorld,
         onSuccess: () => {
@@ -128,7 +189,7 @@ export const usePersistence = ({
         }
     });
 
-    // 4. Create Empty World Mutation
+    // 5. Create Empty World Mutation
     const createEmptyMutation = useMutation({
         mutationFn: async () => {
             setGenerationStatus(`正在初始化新世界...`);
@@ -145,7 +206,7 @@ export const usePersistence = ({
         }
     });
 
-    // 5. Import World Mutation
+    // 6. Import World Mutation
     const importMutation = useMutation({
         mutationFn: async (importText: string) => {
             setGenerationStatus("正在深度分析文本架构...");
@@ -188,7 +249,7 @@ export const usePersistence = ({
         }
     });
 
-    // 6. Apply Preset Mutation
+    // 7. Apply Preset Mutation
     const presetMutation = useMutation({
         mutationFn: async (preset: WorldPreset) => {
             setGenerationStatus(`正在构建【${preset.name}】的历史背景...`);
@@ -236,8 +297,9 @@ export const usePersistence = ({
         createEmptyMutation.mutate();
     };
 
-    const handleSaveWorld = () => {
-        saveMutation.mutate();
+    const handleSyncToGitHub = () => {
+        const data = constructWorldData();
+        syncMutation.mutate(data);
     };
 
     const handleLoadWorldList = () => {
@@ -292,7 +354,9 @@ export const usePersistence = ({
         // State
         currentWorldId, setCurrentWorldId,
         worldName, setWorldName,
-        isSaving: saveMutation.isPending,
+        isSaving: syncMutation.isPending, // Start with sync pending
+        isAutoSaving,
+        lastAutoSaveTime,
         savedWorlds,
         isLoadingWorlds,
         isGeneratingWorld,
@@ -305,7 +369,7 @@ export const usePersistence = ({
 
         // Handlers
         handleCreateEmptyWorld,
-        handleSaveWorld,
+        handleSaveWorld: handleSyncToGitHub, // Renamed in UI
         handleLoadWorldList,
         handleLoadWorld,
         handleDeleteWorld,

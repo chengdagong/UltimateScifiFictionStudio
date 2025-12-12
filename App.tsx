@@ -15,6 +15,7 @@ import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
 import { StatusBar } from './components/StatusBar';
 import { GitHubConnectModal } from './components/GitHubConnectModal';
 import { RepoSelectionModal } from './components/RepoSelectionModal';
+import { BranchManagementModal } from './components/BranchManagementModal';
 
 import { useGitHub } from './components/GitHubContext';
 
@@ -37,6 +38,7 @@ const App: React.FC = () => {
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [showGitHubConnectModal, setShowGitHubConnectModal] = useState(false);
    const [showRepoSelectionModal, setShowRepoSelectionModal] = useState(false);
+   const [showBranchModal, setShowBranchModal] = useState(false);
 
    const { login, logout, user: githubUser, isLoading: isGithubLoading, currentRepo } = useGitHub();
 
@@ -91,7 +93,12 @@ const App: React.FC = () => {
       <div className="flex flex-col h-screen bg-slate-100 text-slate-800 font-sans overflow-hidden">
          <div className="flex-1 flex overflow-hidden">
 
-            {persistence.isGeneratingWorld && <WorldGenerationOverlay status={persistence.generationStatus} />}
+            {/* --- Modals/Overlays --- */}
+            {persistence.isGeneratingWorld && (
+               <WorldGenerationOverlay
+                  status={persistence.generationStatus}
+               />
+            )}
 
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
@@ -263,13 +270,25 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-3">
+                     {/* Auto Save Status */}
+                     <div className="hidden lg:flex items-center gap-2 text-[10px] text-slate-400 mr-2">
+                        {persistence.isAutoSaving ? (
+                           <><Loader2 className="w-3 h-3 animate-spin" /> 保存本地中...</>
+                        ) : (
+                           <span title={`上次自动保存: ${new Date(persistence.lastAutoSaveTime).toLocaleTimeString()}`}>
+                              本地已备份
+                           </span>
+                        )}
+                     </div>
+
                      <button
                         onClick={persistence.handleSaveWorld}
                         disabled={persistence.isSaving}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors"
-                        title="保存"
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-slate-600 hover:text-indigo-600 transition-colors border border-slate-200 rounded-lg hover:border-indigo-300 bg-white"
+                        title="提交并推送到 GitHub (Commit & Push)"
                      >
-                        <Save className="w-4 h-4" />
+                        {persistence.isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        <span>同步云端</span>
                      </button>
                      <div className="h-6 w-px bg-slate-200"></div>
                      <button
@@ -278,7 +297,7 @@ const App: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
                      >
                         {worldModel.isSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        <span>同步世界状态</span>
+                        <span>刷新状态</span>
                      </button>
                   </div>
                </header>
@@ -400,7 +419,7 @@ const App: React.FC = () => {
             </main>
          </div>
 
-         <StatusBar />
+         <StatusBar isOnline={true} onBranchClick={() => setShowBranchModal(true)} />
 
          <SettingsModal
             isOpen={showSettingsModal}
@@ -417,6 +436,11 @@ const App: React.FC = () => {
          <RepoSelectionModal
             isOpen={showRepoSelectionModal}
             onClose={() => setShowRepoSelectionModal(false)}
+         />
+
+         <BranchManagementModal
+            isOpen={showBranchModal}
+            onClose={() => setShowBranchModal(false)}
          />
 
          {
