@@ -427,6 +427,10 @@ export const usePersistence = ({
                 const world = savedWorlds.find(w => w.id === lastId);
                 if (world) {
                     handleLoadWorld(world);
+                } else {
+                    // If the last world doesn't exist anymore, clear the reference
+                    console.warn(`Last world ${lastId} not found in saved worlds, clearing reference`);
+                    localStorage.removeItem(`lastWorld_${user}`);
                 }
             }
         }
