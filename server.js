@@ -78,13 +78,13 @@ function createProjectStructure(projectDir) {
 }
 
 // Helper: Initialize project files
-function initializeProjectFiles(projectDir, projectData) {
+function initializeProjectFiles(projectDir, projectData, slug) {
     // project.json
     const projectMeta = {
         version: "2.0",
-        id: projectData.id || Date.now().toString(),
+        id: slug, // Use slug as ID to match directory name
         name: projectData.name,
-        slug: generateSlug(projectData.name),
+        slug: slug,
         frameworkId: projectData.frameworkId,
         currentTimeSetting: projectData.currentTimeSetting || '',
         createdAt: projectData.createdAt || Date.now(),
@@ -676,8 +676,8 @@ const server = http.createServer(async (req, res) => {
                 // Create directory structure
                 createProjectStructure(projectDir);
 
-                // Initialize files
-                const projectMeta = initializeProjectFiles(projectDir, projectData);
+                // Initialize files with slug as ID
+                const projectMeta = initializeProjectFiles(projectDir, projectData, slug);
 
                 res.writeHead(201, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, project: projectMeta }));
