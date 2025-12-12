@@ -338,6 +338,9 @@ function readProjectData(projectDir) {
 
 // Helper: Update project files
 function updateProjectFiles(projectDir, worldData) {
+    console.log(`[updateProjectFiles] Starting update for project: ${worldData.name || 'Unknown'}`);
+    console.log(`[updateProjectFiles] worldData keys:`, Object.keys(worldData || {}));
+    
     // Update project.json lastModified
     const projectPath = path.join(projectDir, 'project.json');
     const projectMeta = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
@@ -360,12 +363,21 @@ function updateProjectFiles(projectDir, worldData) {
     );
     
     // Update world model files
+    const model = worldData.model || {};
+    console.log(`[updateProjectFiles] Model data:`, {
+        hasModel: !!worldData.model,
+        entitiesCount: (model.entities || []).length,
+        relationshipsCount: (model.relationships || []).length,
+        entityStatesCount: (model.entityStates || []).length,
+        technologiesCount: (model.technologies || []).length,
+        techDependenciesCount: (model.techDependencies || []).length
+    });
     fs.writeFileSync(
         path.join(projectDir, 'world', 'entities.json'),
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            entities: worldData.model.entities
+            entities: model.entities || []
         }, null, 2)
     );
     
@@ -374,7 +386,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            relationships: worldData.model.relationships
+            relationships: model.relationships || []
         }, null, 2)
     );
     
@@ -383,7 +395,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            entityStates: worldData.model.entityStates
+            entityStates: model.entityStates || []
         }, null, 2)
     );
     
@@ -392,7 +404,7 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            technologies: worldData.model.technologies
+            technologies: model.technologies || []
         }, null, 2)
     );
     
@@ -401,12 +413,16 @@ function updateProjectFiles(projectDir, worldData) {
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            dependencies: worldData.model.techDependencies
+            dependencies: model.techDependencies || []
         }, null, 2)
     );
     
     // Update stories
-    const segments = worldData.storySegments.map(seg => ({
+    console.log(`[updateProjectFiles] Story segments:`, {
+        hasStorySegments: !!worldData.storySegments,
+        segmentsCount: (worldData.storySegments || []).length
+    });
+    const segments = (worldData.storySegments || []).map(seg => ({
         id: seg.id,
         timestamp: seg.timestamp,
         influencedBy: seg.influencedBy,
@@ -430,7 +446,7 @@ function updateProjectFiles(projectDir, worldData) {
         });
     }
     
-    worldData.storySegments.forEach(seg => {
+    (worldData.storySegments || []).forEach(seg => {
         const frontmatter = `---
 id: ${seg.id}
 timestamp: ${seg.timestamp}
@@ -445,6 +461,10 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
     });
     
     // Update artifacts
+    console.log(`[updateProjectFiles] Artifacts:`, {
+        hasArtifacts: !!worldData.artifacts,
+        artifactsCount: (worldData.artifacts || []).length
+    });
     const artifacts = (worldData.artifacts || []).map(art => ({
         id: art.id,
         title: art.title,
@@ -485,7 +505,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            agents: worldData.agents
+            agents: worldData.agents || []
         }, null, 2)
     );
     
@@ -494,9 +514,11 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
         JSON.stringify({
             version: "1.0",
             lastModified: Date.now(),
-            steps: worldData.workflow
+            steps: worldData.workflow || []
         }, null, 2)
     );
+    
+    console.log(`[updateProjectFiles] Update completed successfully for project: ${worldData.name}`);
 }
 
 // Ensure data directories exist
@@ -732,8 +754,11 @@ const server = http.createServer(async (req, res) => {
             try {
                 const projectId = req.url.split('/')[3];
                 const projectDir = path.join(__dirname, 'data', 'users', currentUser, 'projects', projectId);
+                
+                console.log(`[PUT /api/projects/${projectId}] Update request from user: ${currentUser}`);
 
                 if (!fs.existsSync(projectDir)) {
+                    console.error(`[PUT /api/projects/${projectId}] Project directory not found: ${projectDir}`);
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Project not found' }));
                     return;
@@ -742,9 +767,11 @@ const server = http.createServer(async (req, res) => {
                 const worldData = JSON.parse(body);
                 updateProjectFiles(projectDir, worldData);
 
+                console.log(`[PUT /api/projects/${projectId}] Update successful`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (e) {
+                console.error(`[PUT /api/projects] Error:`, e);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
             }
