@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 // import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
-import { saveWorld, getWorlds, deleteWorld } from '../services/LocalStorageService';
+import { saveWorld, getWorlds, deleteWorld, commitProject } from '../services/LocalStorageService';
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
@@ -31,7 +31,8 @@ export const usePersistence = ({
 
     // Persistence State
     const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
-    const [worldName, setWorldName] = useState("新世界");
+    const [worldName, setWorldName] = useState("");
+    const [commitMessage, setCommitMessage] = useState("");
 
     // Auto-save State
     const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number>(Date.now());
@@ -119,14 +120,31 @@ export const usePersistence = ({
         }
     });
 
+    // 4. Git Commit Mutation
+    const commitMutation = useMutation({
+        mutationFn: async ({ projectId, message }: { projectId: string; message: string }) => {
+            if (!message.trim()) throw new Error("请输入节点说明");
+            return await commitProject(projectId, message);
+        },
+        onSuccess: () => {
+            setShowSaveModal(false);
+            setCommitMessage("");
+            alert("版本节点创建成功！");
+        },
+        onError: (e: any) => {
+            console.error(e);
+            alert("创建节点失败: " + e.message);
+        }
+    });
+
     // --- Auto-Save Effect ---
     // Trigger auto-save only when data changes (Debounced 2s)
     useEffect(() => {
         // Construct data snapshot inside effect to capture current state
         const currentData = constructWorldData();
 
-        // Prevent auto-save if unnamed or during initialization
-        if (!worldName || worldName === "新世界") return;
+        // Prevent auto-save if unnamed (user must name their world)
+        if (!worldName) return;
 
         const timer = setTimeout(() => {
             if (!autoSaveMutation.isPending && !saveMutation.isPending) {
@@ -151,7 +169,7 @@ export const usePersistence = ({
         storyEngine.artifacts
     ]);
 
-    // 4. Delete World Mutation
+    // 5. Delete World Mutation
     const deleteMutation = useMutation({
         mutationFn: deleteWorld,
         onSuccess: () => {
@@ -163,7 +181,7 @@ export const usePersistence = ({
         }
     });
 
-    // 5. Create Empty World Mutation
+    // 6. Create Empty World Mutation
     const createEmptyMutation = useMutation({
         mutationFn: async () => {
             setGenerationStatus(`正在初始化新世界...`);
@@ -174,13 +192,13 @@ export const usePersistence = ({
             storyEngine.resetStoryEngine();
             // storyEngine.resetStoryEngine() already clears artifacts
             setCurrentWorldId(undefined);
-            setWorldName("未命名世界");
+            setWorldName(""); // User must provide a name before saving
             setActiveTab('participants');
             setShowNewWorldModal(false);
         }
     });
 
-    // 6. Import World Mutation
+    // 7. Import World Mutation
     const importMutation = useMutation({
         mutationFn: async (importText: string) => {
             setGenerationStatus("正在深度分析文本架构...");
@@ -198,7 +216,7 @@ export const usePersistence = ({
                 technologies: result.technologies || [],
                 techDependencies: result.techDependencies || []
             });
-            setWorldName("导入的世界");
+            setWorldName(""); // User must provide a name before saving
 
             // Use extracted story segments if available, otherwise fallback to raw text
             if (result.storySegments && result.storySegments.length > 0) {
@@ -223,7 +241,7 @@ export const usePersistence = ({
         }
     });
 
-    // 7. Apply Preset Mutation
+    // 8. Apply Preset Mutation
     const presetMutation = useMutation({
         mutationFn: async (preset: WorldPreset) => {
             setGenerationStatus(`正在构建【${preset.name}】的历史背景...`);
@@ -274,6 +292,14 @@ export const usePersistence = ({
     const handleSaveLocal = () => {
         const data = constructWorldData();
         saveMutation.mutate(data);
+    };
+
+    const handleCommit = () => {
+        if (!currentWorldId) {
+            alert("请先创建或加载世界");
+            return;
+        }
+        commitMutation.mutate({ projectId: currentWorldId, message: commitMessage });
     };
 
     const handleLoadWorldList = () => {
@@ -342,10 +368,10 @@ export const usePersistence = ({
 
     return {
         // State
-        // State
         currentWorldId, setCurrentWorldId,
         worldName, setWorldName,
-        isSaving: saveMutation.isPending,
+        commitMessage, setCommitMessage,
+        isSaving: saveMutation.isPending || commitMutation.isPending,
         isAutoSaving,
         lastAutoSaveTime,
         savedWorlds,
@@ -360,7 +386,7 @@ export const usePersistence = ({
 
         // Handlers
         handleCreateEmptyWorld,
-        handleSaveWorld: handleSaveLocal,
+        handleSaveWorld: handleCommit,
         handleLoadWorldList,
         handleLoadWorld,
         handleDeleteWorld,

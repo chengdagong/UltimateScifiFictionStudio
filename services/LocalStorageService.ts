@@ -23,13 +23,10 @@ export const getProjects = async (): Promise<WorldData[]> => {
 /**
  * Create a new project
  */
-export const createProject = async (name: string, frameworkId: string): Promise<string> => {
+export const createProject = async (worldData: WorldData): Promise<string> => {
     try {
-        const response = await axios.post<{ id: string }>(`${API_BASE_URL}/projects`, {
-            name,
-            frameworkId
-        });
-        return response.data.id;
+        const response = await axios.post<{ project: { id: string } }>(`${API_BASE_URL}/projects`, worldData);
+        return response.data.project.id;
     } catch (error) {
         console.error("Error creating project:", error);
         throw error;
@@ -58,8 +55,8 @@ export const saveProject = async (worldData: WorldData): Promise<string> => {
             throw new Error('Project ID is required for saving');
         }
 
-        const response = await axios.put<{ id: string }>(`${API_BASE_URL}/projects/${worldData.id}`, worldData);
-        return response.data.id;
+        await axios.put<{ success: boolean }>(`${API_BASE_URL}/projects/${worldData.id}`, worldData);
+        return worldData.id;
     } catch (error) {
         console.error("Error saving project:", error);
         throw error;
@@ -141,7 +138,7 @@ export const saveWorld = async (worldData: WorldData): Promise<string> => {
         if (!worldData.id) {
             // Generate a temporary ID for the creation
             worldData.id = crypto.randomUUID();
-            return await createProject(worldData.name, worldData.frameworkId);
+            return await createProject(worldData);
         }
 
         // Otherwise, update existing project

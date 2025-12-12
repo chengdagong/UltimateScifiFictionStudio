@@ -48,6 +48,7 @@ const DashboardContent: React.FC = () => {
    const [importText, setImportText] = useState("");
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [showUserMenu, setShowUserMenu] = useState(false);
+   const [newWorldName, setNewWorldName] = useState("新世界");
 
    const { user, logout } = useAuth();
 
@@ -114,6 +115,51 @@ const DashboardContent: React.FC = () => {
 
    const showToast = (message: string, type: ToastType = 'info') => {
       setToast({ message, type });
+   };
+
+   // Check if world name conflicts with existing projects
+   const isNameConflict = (name: string): boolean => {
+      return persistence.savedWorlds.some(w => w.name === name);
+   };
+
+   // Wrappers for world creation that apply the name
+   const handleCreateEmptyWithName = () => {
+      if (!newWorldName.trim()) {
+         alert("请输入世界名称");
+         return;
+      }
+      if (isNameConflict(newWorldName)) {
+         alert("该名称已存在，请使用其他名称");
+         return;
+      }
+      persistence.handleCreateEmptyWorld();
+      persistence.setWorldName(newWorldName);
+   };
+
+   const handleImportWithName = (text: string) => {
+      if (!newWorldName.trim()) {
+         alert("请输入世界名称");
+         return;
+      }
+      if (isNameConflict(newWorldName)) {
+         alert("该名称已存在，请使用其他名称");
+         return;
+      }
+      persistence.handleImportWorld(text);
+      persistence.setWorldName(newWorldName);
+   };
+
+   const handleApplyPresetWithName = (preset: any) => {
+      if (!newWorldName.trim()) {
+         alert("请输入世界名称");
+         return;
+      }
+      if (isNameConflict(newWorldName)) {
+         alert("该名称已存在，请使用其他名称");
+         return;
+      }
+      persistence.handleApplyPreset(preset);
+      persistence.setWorldName(newWorldName);
    };
 
    const handleRequestAnalysis = async (text: string, action: 'analyze' | 'explain' | 'expand' = 'analyze') => {
@@ -656,32 +702,65 @@ const DashboardContent: React.FC = () => {
 
                      <div className="p-6 overflow-y-auto">
                         {newWorldTab === 'empty' && (
-                           <div className="space-y-4 text-center py-8">
+                           <div className="space-y-4 py-4">
                               <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                  <Sparkles className="w-8 h-8 text-indigo-600" />
                               </div>
-                              <h3 className="text-lg font-bold text-slate-800">{t('new_world_from_scratch_title')}</h3>
-                              <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                              <h3 className="text-lg font-bold text-slate-800 text-center">{t('new_world_from_scratch_title')}</h3>
+                              <p className="text-slate-500 text-sm max-w-sm mx-auto text-center">
                                  {t('new_world_from_scratch_desc')}
                               </p>
-                              <button
-                                 onClick={persistence.handleCreateEmptyWorld}
-                                 className="mt-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200/50 transition-all"
-                              >
-                                 {t('action_create_now')}
-                              </button>
+                              
+                              <div className="max-w-md mx-auto mt-6">
+                                 <label className="block text-sm font-bold text-slate-700 mb-2">世界名称</label>
+                                 <input
+                                    type="text"
+                                    value={newWorldName}
+                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    placeholder="输入世界名称..."
+                                 />
+                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
+                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 )}
+                              </div>
+
+                              <div className="text-center">
+                                 <button
+                                    onClick={handleCreateEmptyWithName}
+                                    disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                    className="mt-4 px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                 >
+                                    {t('action_create_now')}
+                                 </button>
+                              </div>
                            </div>
                         )}
 
                         {newWorldTab === 'presets' && (
                            <div className="space-y-4">
+                              <div className="max-w-md mx-auto mb-4">
+                                 <label className="block text-sm font-bold text-slate-700 mb-2">世界名称</label>
+                                 <input
+                                    type="text"
+                                    value={newWorldName}
+                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    placeholder="输入世界名称..."
+                                 />
+                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
+                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 )}
+                              </div>
+
                               <p className="text-sm text-slate-500 mb-2">{t('preset_selection_desc')}</p>
                               <div className="grid grid-cols-1 gap-4">
                                  {WORLD_PRESETS.map(preset => (
                                     <button
                                        key={preset.id}
-                                       onClick={() => persistence.handleApplyPreset(preset)}
-                                       className="flex flex-col text-left p-4 border border-slate-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all group"
+                                       onClick={() => handleApplyPresetWithName(preset)}
+                                       disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                       className="flex flex-col text-left p-4 border border-slate-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-transparent"
                                     >
                                        <div className="flex justify-between items-start mb-2">
                                           <h3 className="font-bold text-slate-800 group-hover:text-indigo-700">{preset.name}</h3>
@@ -695,17 +774,35 @@ const DashboardContent: React.FC = () => {
 
                         {newWorldTab === 'import' && (
                            <div className="space-y-4">
-                              <p className="text-sm text-slate-500">{t('import_text_desc')}</p>
-                              <textarea
-                                 className="w-full h-48 p-4 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                 placeholder={t('placeholder_import_text')}
-                                 value={importText}
-                                 onChange={e => setImportText(e.target.value)}
-                              />
+                              <div>
+                                 <label className="block text-sm font-bold text-slate-700 mb-2">世界名称</label>
+                                 <input
+                                    type="text"
+                                    value={newWorldName}
+                                    onChange={(e) => setNewWorldName(e.target.value)}
+                                    className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    placeholder="输入世界名称..."
+                                 />
+                                 {isNameConflict(newWorldName) && newWorldName.trim() && (
+                                    <p className="text-red-500 text-sm mt-2">⚠️ 该名称已存在</p>
+                                 )}
+                              </div>
+
+                              <div>
+                                 <p className="text-sm text-slate-500 mb-2">{t('import_text_desc')}</p>
+                                 <textarea
+                                    className="w-full h-48 p-4 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    placeholder={t('placeholder_import_text')}
+                                    value={importText}
+                                    onChange={e => setImportText(e.target.value)}
+                                 />
+                              </div>
+
                               <div className="flex justify-end">
                                  <button
-                                    onClick={() => persistence.handleImportWorld(importText)}
-                                    className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                                    onClick={() => handleImportWithName(importText)}
+                                    disabled={!newWorldName.trim() || isNameConflict(newWorldName)}
+                                    className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                  >
                                     {t('action_start_analysis')}
                                  </button>
@@ -726,9 +823,9 @@ const DashboardContent: React.FC = () => {
                      <input
                         autoFocus
                         className="w-full p-2 border rounded mb-4"
-                        value={persistence.worldName}
-                        onChange={e => persistence.setWorldName(e.target.value)}
-                        placeholder={t('placeholder_world_name')}
+                        value={persistence.commitMessage}
+                        onChange={e => persistence.setCommitMessage(e.target.value)}
+                        placeholder={t('placeholder_commit_message')}
                      />
                      <div className="flex justify-end gap-2">
                         <button onClick={() => persistence.setShowSaveModal(false)} className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded">{t('action_cancel')}</button>
