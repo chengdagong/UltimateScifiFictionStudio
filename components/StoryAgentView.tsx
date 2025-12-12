@@ -43,6 +43,7 @@ interface StoryAgentViewProps {
     // Artifacts State
     artifacts: StoryArtifact[];
     onUpdateArtifacts: (val: StoryArtifact[]) => void;
+    onAnalysisRequest?: (text: string) => void;
 }
 
 const DEFAULT_AGENTS: StoryAgent[] = [
@@ -64,7 +65,8 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     executionLogs, onUpdateExecutionLogs,
     stepOutputs, onUpdateStepOutputs,
     generatedDraft, onUpdateGeneratedDraft,
-    artifacts, onUpdateArtifacts
+    artifacts, onUpdateArtifacts,
+    onAnalysisRequest
 }) => {
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
@@ -766,6 +768,7 @@ ${contextText}
                                                 <MilkdownEditor
                                                     content={output}
                                                     onChange={(val) => onUpdateStepOutputs(prev => ({ ...prev, [step.id]: val }))}
+                                                    onAnalysisRequest={onAnalysisRequest}
                                                 />
                                             </div>
                                         </div>

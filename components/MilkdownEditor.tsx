@@ -8,10 +8,13 @@ import { gfm } from '@milkdown/preset-gfm';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { history } from '@milkdown/plugin-history';
 
+import { useWorldAdminMenu } from '../hooks/useWorldAdminMenu';
+
 interface MilkdownEditorProps {
   content: string;
   onChange: (text: string) => void;
   readOnly?: boolean;
+  onAnalysisRequest?: (text: string) => void;
 }
 
 const InnerEditor: React.FC<MilkdownEditorProps> = ({ content, onChange, readOnly }) => {
@@ -21,7 +24,7 @@ const InnerEditor: React.FC<MilkdownEditorProps> = ({ content, onChange, readOnl
       .config((ctx) => {
         ctx.set(rootCtx, root);
         ctx.set(defaultValueCtx, content);
-        
+
         ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
           onChange(markdown);
         });
@@ -30,14 +33,26 @@ const InnerEditor: React.FC<MilkdownEditorProps> = ({ content, onChange, readOnl
       .use(gfm)
       .use(history)
       .use(listener);
-  }, []); 
+  }, []);
 
   return <Milkdown />;
 };
 
 const MilkdownEditor: React.FC<MilkdownEditorProps> = (props) => {
+  const { handleContextMenu, renderMenu } = useWorldAdminMenu({
+    onAnalyze: (text) => props.onAnalysisRequest?.(text)
+  });
+
   return (
-    <div className="h-full relative group">
+    <div
+      className="h-full relative group"
+      onContextMenu={(e) => {
+        if (props.onAnalysisRequest) {
+          handleContextMenu(e, props.content);
+        }
+      }}
+    >
+      {renderMenu()}
       <div className="h-full overflow-y-auto custom-editor-wrapper">
         <MilkdownProvider>
           <InnerEditor {...props} />

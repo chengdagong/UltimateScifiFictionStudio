@@ -7,10 +7,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { BrainstormSession, BrainstormMessage, BrainstormConfig, ApiSettings } from '../types';
 import { sendChatMessage } from '../services/chatService';
+import { useWorldAdminMenu } from '../hooks/useWorldAdminMenu';
 
 interface BrainstormViewProps {
     globalApiSettings: ApiSettings;
     onSaveSession?: (session: BrainstormSession) => void;
+    onAnalysisRequest?: (text: string) => void;
 }
 
 const DEFAULT_CONFIG: BrainstormConfig = {
@@ -22,7 +24,11 @@ const DEFAULT_CONFIG: BrainstormConfig = {
     maxOutputTokens: 2048
 };
 
-const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) => {
+const BrainstormView: React.FC<BrainstormViewProps> = ({
+    globalApiSettings,
+    onSaveSession,
+    onAnalysisRequest
+}) => {
     // State
     const [sessions, setSessions] = useState<BrainstormSession[]>(() => {
         const saved = localStorage.getItem('ecoNarrative_brainstorm_sessions');
@@ -166,6 +172,10 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
         setSessions(prev => prev.map(s => s.id === id ? { ...s, name: newName } : s));
     };
 
+    const { handleContextMenu, renderMenu } = useWorldAdminMenu({
+        onAnalyze: (text) => onAnalysisRequest?.(text)
+    });
+
     if (!activeSession) {
         return <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>;
     }
@@ -244,7 +254,17 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                 </div>
 
                 {/* Messages List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div
+                    className="flex-1 overflow-y-auto p-4 space-y-6 relative"
+                    onContextMenu={(e) => {
+                        // Prevent context menu on empty space unless selected
+                        const selection = window.getSelection()?.toString();
+                        if (onAnalysisRequest && selection) {
+                            handleContextMenu(e, "");
+                        }
+                    }}
+                >
+                    {renderMenu()}
                     {activeSession.messages.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4">
                             <Sparkles className="w-12 h-12" />
@@ -257,7 +277,14 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.role === 'user' ? 'bg-slate-800 text-white' : 'bg-indigo-600 text-white'}`}>
                                 {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                             </div>
-                            <div className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-slate-100 text-slate-800 rounded-tr-none' : 'bg-indigo-50/50 text-slate-800 border border-indigo-100 rounded-tl-none prose prose-sm max-w-none'}`}>
+                            <div
+                                className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-slate-100 text-slate-800 rounded-tr-none' : 'bg-indigo-50/50 text-slate-800 border border-indigo-100 rounded-tl-none prose prose-sm max-w-none'}`}
+                                onContextMenu={(e) => {
+                                    if (onAnalysisRequest) {
+                                        handleContextMenu(e, msg.content);
+                                    }
+                                }}
+                            >
                                 {msg.role === 'user' ? (
                                     <div className="whitespace-pre-wrap">{msg.content}</div>
                                 ) : (
@@ -296,6 +323,11 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({ globalApiSettings }) =>
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
                                     handleSendMessage();
+                                }
+                            }}
+                            onContextMenu={(e) => {
+                                if (onAnalysisRequest && input.trim()) {
+                                    handleContextMenu(e, input);
                                 }
                             }}
                             placeholder="输入消息..."

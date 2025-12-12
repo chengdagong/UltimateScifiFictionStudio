@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle } from 'lucide-react';
+import { BookOpen, Settings2, Sparkles, Save, FolderOpen, X, Loader2, Globe2, Activity, BookText, RefreshCw, Trash2, Menu, Network, Cpu, PanelLeftClose, PanelLeftOpen, User, MessageCircle, Inbox } from 'lucide-react';
+import { extractEntitiesFromSnippet } from './services/geminiService';
+import { SocialEntity } from './types';
 
 // Components
 import ParticipantsView from './components/ParticipantsView';
@@ -11,6 +13,8 @@ import CharacterCardView from './components/CharacterCardView';
 import BrainstormView from './components/BrainstormView';
 import SettingsModal from './components/SettingsModal';
 import { WorldGenerationOverlay } from './components/WorldGenerationOverlay';
+import WorldAdminDialog from './components/WorldAdminDialog';
+import { Toast, ToastType } from './components/Toast';
 
 // Hooks
 import { useApiSettings } from './hooks/useApiSettings';
@@ -60,6 +64,40 @@ const App: React.FC = () => {
       worldContext,
       currentTimeSetting,
    } = worldModel;
+
+   // --- World Admin Analysis Integration ---
+   const [isInboxOpen, setIsInboxOpen] = useState(false);
+   const [inboxEntities, setInboxEntities] = useState<SocialEntity[]>([]);
+   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+   // Toast State
+   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+   const showToast = (message: string, type: ToastType = 'info') => {
+      setToast({ message, type });
+   };
+
+   const handleRequestAnalysis = async (text: string) => {
+      console.log("App: handleRequestAnalysis called", text);
+      setIsAnalyzing(true);
+      showToast("正在后台分析文本... 请稍候", 'info');
+
+      try {
+         const results = await extractEntitiesFromSnippet(text, model.entities, apiSettings);
+         if (results.length > 0) {
+            setInboxEntities(prev => [...prev, ...results]);
+            showToast(`分析完成！已生成 ${results.length} 个新实体，请查看收件箱`, 'success');
+         } else {
+            showToast("分析完成，但未能从文本中提取到有效实体。", 'info');
+         }
+      } catch (e: any) {
+         console.error("Analysis failed", e);
+         showToast("分析失败: " + e.message, 'error');
+      } finally {
+         setIsAnalyzing(false);
+      }
+   };
+
    // Wait, worldName is in persistence hook, NOT worldModel.
    // I need to destructure carefully.
 
@@ -68,7 +106,23 @@ const App: React.FC = () => {
 
          {persistence.isGeneratingWorld && <WorldGenerationOverlay status={persistence.generationStatus} />}
 
-         {/* Mobile Header */}
+         <WorldAdminDialog
+            isOpen={isInboxOpen}
+            onClose={() => setIsInboxOpen(false)}
+            inboxEntities={inboxEntities}
+            onAddEntities={(entitiesToAdd) => {
+               // Add to world
+               entitiesToAdd.forEach(e => worldModel.handleAddEntity(e.name, e.description, e.category));
+               // Remove from inbox
+               const addedIds = new Set(entitiesToAdd.map(e => e.id));
+               setInboxEntities(prev => prev.filter(e => !addedIds.has(e.id)));
+            }}
+            onDiscardEntities={(idsToRemove) => {
+               setInboxEntities(prev => prev.filter(e => !idsToRemove.has(e.id)));
+            }}
+            apiSettings={apiSettings}
+         />
+
          <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-50">
             <div className="flex items-center gap-2">
                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-serif font-bold">E</div>
@@ -112,6 +166,25 @@ const App: React.FC = () => {
 
             <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
                {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">世界构建 (World)</p>}
+
+               <button
+                  onClick={() => { setIsInboxOpen(true); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isInboxOpen ? 'bg-indigo-600/10 text-indigo-400' : 'hover:bg-slate-800'} ${isMinimalUI ? 'justify-center px-0' : ''} relative`}
+                  title={isMinimalUI ? "收件箱" : undefined}
+               >
+                  <Inbox className="w-4 h-4" />
+                  {!isMinimalUI && "收件箱"}
+                  {inboxEntities.length > 0 && (
+                     <span className="absolute right-2 top-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full min-w-[16px] text-center">
+                        {inboxEntities.length}
+                     </span>
+                  )}
+                  {isAnalyzing && (
+                     <span className="absolute right-2 top-2 bg-indigo-500 text-white text-[10px] px-1.5 rounded-full animate-pulse">
+                        ...
+                     </span>
+                  )}
+               </button>
 
                <button
                   onClick={() => { setActiveTab('participants'); setIsMobileMenuOpen(false); }}
@@ -347,6 +420,9 @@ const App: React.FC = () => {
                         onUpdateStorySegment={worldModel.handleUpdateStorySegment}
                         onRemoveStorySegment={worldModel.handleRemoveStorySegment}
 
+                        // Analysis
+                        onAnalysisRequest={handleRequestAnalysis}
+
                         // Lifted State Methods
                         storyGuidance={storyEngine.storyGuidance}
                         onUpdateStoryGuidance={storyEngine.setStoryGuidance}
@@ -368,9 +444,22 @@ const App: React.FC = () => {
 
                {
                   activeTab === 'brainstorm' && (
-                     <BrainstormView globalApiSettings={apiSettings} />
+                     <BrainstormView
+                        globalApiSettings={apiSettings}
+                        onAnalysisRequest={handleRequestAnalysis}
+                     />
                   )
                }
+               {
+                  toast && (
+                     <Toast
+                        message={toast.message}
+                        type={toast.type}
+                        onClose={() => setToast(null)}
+                     />
+                  )
+               }
+
             </div >
          </main >
 
