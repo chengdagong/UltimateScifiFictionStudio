@@ -374,9 +374,6 @@ export const usePersistence = ({
 
     const handleLoadWorld = (world: WorldData) => {
         setCurrentWorldId(world.id);
-        if (user && world.id) {
-            localStorage.setItem(`lastWorld_${user}`, world.id);
-        }
         setWorldName(world.name);
 
         worldModel.setModel(world.model || { entities: [], relationships: [], entityStates: [], technologies: [], techDependencies: [] });
@@ -419,22 +416,7 @@ export const usePersistence = ({
     // Aggregated Loading State
     const isGeneratingWorld = createEmptyMutation.isPending || importMutation.isPending || presetMutation.isPending;
 
-    // Auto-load last world
-    useEffect(() => {
-        if (!isLoadingWorlds && savedWorlds.length > 0 && user && !currentWorldId) {
-            const lastId = localStorage.getItem(`lastWorld_${user}`);
-            if (lastId) {
-                const world = savedWorlds.find(w => w.id === lastId);
-                if (world) {
-                    handleLoadWorld(world);
-                } else {
-                    // If the last world doesn't exist anymore, clear the reference
-                    console.warn(`Last world ${lastId} not found in saved worlds, clearing reference`);
-                    localStorage.removeItem(`lastWorld_${user}`);
-                }
-            }
-        }
-    }, [isLoadingWorlds, savedWorlds, user]); // Run once when worlds loaded
+    // No auto-load - user should manually select a project from the welcome screen
 
     return {
         // State

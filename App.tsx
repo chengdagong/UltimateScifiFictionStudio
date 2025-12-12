@@ -911,7 +911,7 @@ const DashboardContent: React.FC = () => {
                            <div className="text-center py-8 text-slate-400">{t('empty_no_saves')}</div>
                         ) : (
                            <div className="space-y-2">
-                              {persistence.savedWorlds.map(w => (
+                              {[...persistence.savedWorlds].sort((a, b) => b.lastModified - a.lastModified).map(w => (
                                  <div key={w.id} className="flex gap-2 relative group">
                                     <button
                                        onClick={() => persistence.handleLoadWorld(w)}
