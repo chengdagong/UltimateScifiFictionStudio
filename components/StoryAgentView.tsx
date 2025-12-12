@@ -51,19 +51,42 @@ interface StoryAgentViewProps {
 // REMOVED: DEFAULT_AGENTS moved inside component for i18n
 
 const StoryAgentView: React.FC<StoryAgentViewProps> = ({
-    agents, workflow, model, framework, worldContext, storySegments, settings, currentTimeSetting,
-    onUpdateAgents, onUpdateWorkflow, onAddStorySegment, onUpdateStorySegment, onRemoveStorySegment,
+    agents: agentsProp,
+    workflow: workflowProp,
+    model,
+    framework,
+    worldContext,
+    storySegments: storySegmentsProp,
+    settings,
+    currentTimeSetting,
+    onUpdateAgents,
+    onUpdateWorkflow,
+    onAddStorySegment,
+    onUpdateStorySegment,
+    onRemoveStorySegment,
     // De-structure new props
-    storyGuidance, onUpdateStoryGuidance,
-    workflowStatus, onUpdateWorkflowStatus,
-    currentStepIndex, onUpdateCurrentStepIndex,
-    executionLogs, onUpdateExecutionLogs,
-    stepOutputs, onUpdateStepOutputs,
-    generatedDraft, onUpdateGeneratedDraft,
-    artifacts, onUpdateArtifacts,
+    storyGuidance,
+    onUpdateStoryGuidance,
+    workflowStatus,
+    onUpdateWorkflowStatus,
+    currentStepIndex,
+    onUpdateCurrentStepIndex,
+    executionLogs,
+    onUpdateExecutionLogs,
+    stepOutputs,
+    onUpdateStepOutputs,
+    generatedDraft,
+    onUpdateGeneratedDraft,
+    artifacts: artifactsProp,
+    onUpdateArtifacts,
     onAnalysisRequest,
     taskManager
 }) => {
+    // 防御性处理：确保数组prop始终有默认值
+    const agents = agentsProp || [];
+    const workflow = workflowProp || [];
+    const storySegments = storySegmentsProp || [];
+    const artifacts = artifactsProp || [];
     const { t } = useTranslation();
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
