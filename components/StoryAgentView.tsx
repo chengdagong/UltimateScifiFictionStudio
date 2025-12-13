@@ -828,7 +828,7 @@ ${contextText}
             <div
                 data-testid="agent-floating-window"
                 style={{ left: agentWindowPos.x, top: agentWindowPos.y }}
-                className={`absolute ${windowWidth} h-[600px] max-h-[80vh] bg-white border border-slate-200 shadow-2xl rounded-xl flex flex-col z-40 overflow-hidden transition-all duration-300 ease-in-out`}
+                className={`absolute ${windowWidth} h-[600px] max-h-[80vh] bg-white border border-slate-200 shadow-2xl rounded-xl flex flex-col z-40 overflow-hidden ${isDragging ? '' : 'transition-all duration-300 ease-in-out'}`}
             >
                 <div
                     onMouseDown={(e) => {
