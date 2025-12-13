@@ -34,6 +34,23 @@ const parseJSON = (text: string) => {
     }
 };
 
+const handleApiError = (error: any) => {
+  console.error("API Error:", error);
+  const msg = error.message || JSON.stringify(error);
+
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("fetch failed")) {
+    throw new Error("网络请求失败。请检查您的网络连接、API Key 是否正确，或尝试在设置中配置 Base URL (代理地址)。");
+  }
+
+  if (msg.includes("User location is not supported") || msg.includes("Region not supported") || msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
+    throw new Error("API 错误: 当前地区不支持 (User location is not supported)。\n建议方案：\n1. 开启 VPN 并切换到支持的地区 (如美国、新加坡)。\n2. 在设置中配置反向代理 (Base URL)。");
+  }
+  if (msg.includes("500") || msg.includes("Rpc failed")) {
+    throw new Error("API 服务暂时不可用 (500 RPC Error)，系统已尝试重试。请稍后再试或检查网络。");
+  }
+  throw new Error(`生成失败: ${msg.slice(0, 100)}...`);
+};
+
 export const generateEntitiesForLayer = async (
   layerDef: LayerDefinition,
   context: string,

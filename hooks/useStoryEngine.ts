@@ -31,6 +31,7 @@ export interface UseStoryEngineReturn {
 
     // Actions
     startWorkflow: (selectedSegmentId?: string | null) => Promise<void>;
+    retryCurrentStep: (selectedSegmentId?: string | null) => Promise<void>;
     continueWorkflow: (fromIndex: number) => Promise<void>;
     applyResult: (content: string, selectedSegmentId?: string | null) => void;
     resetStoryEngine: () => void;
@@ -280,6 +281,38 @@ ${contextText}
         await executeStep(0, initialInput);
     }, [settings.apiKey, store.storyGuidance, storySegments, store.workflow]);
 
+    const retryCurrentStep = useCallback(async (selectedSegmentId?: string | null) => {
+        if (store.currentStepIndex < 0) return;
+
+        let input = "";
+        if (store.currentStepIndex === 0) {
+            // Logic from startWorkflow to get initial input
+            let contextSegments = storySegments;
+            if (selectedSegmentId) {
+                const idx = storySegments.findIndex(s => s.id === selectedSegmentId);
+                if (idx !== -1) {
+                    contextSegments = storySegments.slice(0, idx);
+                }
+            }
+
+            const contextText = contextSegments.length > 0
+                ? `【前情提要】:\n${contextSegments[contextSegments.length - 1].content.slice(-2000)}`
+                : "这是故事的开篇。";
+
+            input = `
+${contextText}
+
+【本章核心指令 (User Directive)】:
+"${store.storyGuidance}"
+`;
+        } else {
+            const prevStep = store.workflow[store.currentStepIndex - 1];
+            input = store.stepOutputs[prevStep.id] || "";
+        }
+
+        await executeStep(store.currentStepIndex, input);
+    }, [store.currentStepIndex, store.workflow, store.stepOutputs, storySegments, store.storyGuidance]);
+
     const continueWorkflow = useCallback(async (fromIndex: number) => {
         const currentStep = store.workflow[fromIndex];
         // The input for the next step is the (potentially edited) output of the current step
@@ -331,6 +364,7 @@ ${contextText}
         setArtifacts: createStateSetter(() => store.artifacts, store.setArtifacts),
         
         startWorkflow,
+        retryCurrentStep,
         continueWorkflow,
         applyResult,
         resetStoryEngine: store.reset
