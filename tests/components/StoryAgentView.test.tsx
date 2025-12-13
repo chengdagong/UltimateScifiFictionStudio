@@ -62,56 +62,56 @@ describe('StoryAgentView - Agent List Position', () => {
         const savedPos = { x: 500, y: 200 };
         localStorage.setItem('story_agent_window_pos', JSON.stringify(savedPos));
 
-        const { container } = render(<StoryAgentView {...mockProps} />);
+        const { getByTestId } = render(<StoryAgentView {...mockProps} />);
         
-        const floatingWindow = container.querySelector('.absolute.w-\\[350px\\]');
+        const floatingWindow = getByTestId('agent-floating-window');
         expect(floatingWindow).toBeInTheDocument();
         expect(floatingWindow).toHaveStyle({ left: '500px', top: '200px' });
     });
 
     it('should use default position if localStorage is empty', () => {
-        const { container } = render(<StoryAgentView {...mockProps} />);
+        const { getByTestId } = render(<StoryAgentView {...mockProps} />);
         
-        const floatingWindow = container.querySelector('.absolute.w-\\[350px\\]');
-        // Default X = 1920 - 350 - 20 = 1550
+        const floatingWindow = getByTestId('agent-floating-window');
+        // Default X = 1920 - 400 - 20 = 1500
         // Default Y = 80
-        expect(floatingWindow).toHaveStyle({ left: '1550px', top: '80px' });
+        expect(floatingWindow).toHaveStyle({ left: '1500px', top: '80px' });
     });
 
     it('should save position to localStorage after dragging', () => {
-        const { container } = render(<StoryAgentView {...mockProps} />);
-        const floatingWindow = container.querySelector('.absolute.w-\\[350px\\]') as HTMLElement;
+        const { getByTestId } = render(<StoryAgentView {...mockProps} />);
+        const floatingWindow = getByTestId('agent-floating-window');
         const header = floatingWindow.querySelector('.cursor-move') as HTMLElement;
 
         // Initial position check
-        expect(floatingWindow).toHaveStyle({ left: '1550px', top: '80px' });
+        expect(floatingWindow).toHaveStyle({ left: '1500px', top: '80px' });
 
         // Simulate drag
         // 1. Mouse Down at initial position
-        fireEvent.mouseDown(header, { clientX: 1550, clientY: 80 });
+        fireEvent.mouseDown(header, { clientX: 1500, clientY: 80 });
         
         // 2. Mouse Move to new position (delta: -100, +100)
-        // New pos should be 1450, 180
-        fireEvent.mouseMove(document, { clientX: 1450, clientY: 180 });
+        // New pos should be 1400, 180
+        fireEvent.mouseMove(document, { clientX: 1400, clientY: 180 });
         
         // 3. Mouse Up to end drag
         fireEvent.mouseUp(document);
 
         // Check new position style
-        expect(floatingWindow).toHaveStyle({ left: '1450px', top: '180px' });
+        expect(floatingWindow).toHaveStyle({ left: '1400px', top: '180px' });
 
         // Check localStorage
         const saved = JSON.parse(localStorage.getItem('story_agent_window_pos') || '{}');
-        expect(saved).toEqual({ x: 1450, y: 180 });
+        expect(saved).toEqual({ x: 1400, y: 180 });
     });
 
     it('should maintain position after remount (simulating view switch)', () => {
         // 1. Render and drag to a new position
-        const { unmount, container } = render(<StoryAgentView {...mockProps} />);
-        let floatingWindow = container.querySelector('.absolute.w-\\[350px\\]') as HTMLElement;
+        const { unmount, getByTestId } = render(<StoryAgentView {...mockProps} />);
+        let floatingWindow = getByTestId('agent-floating-window');
         const header = floatingWindow.querySelector('.cursor-move') as HTMLElement;
 
-        fireEvent.mouseDown(header, { clientX: 1550, clientY: 80 });
+        fireEvent.mouseDown(header, { clientX: 1500, clientY: 80 });
         fireEvent.mouseMove(document, { clientX: 1000, clientY: 500 });
         fireEvent.mouseUp(document);
 
@@ -122,8 +122,8 @@ describe('StoryAgentView - Agent List Position', () => {
         unmount();
 
         // 3. Remount
-        const { container: container2 } = render(<StoryAgentView {...mockProps} />);
-        floatingWindow = container2.querySelector('.absolute.w-\\[350px\\]') as HTMLElement;
+        const { getByTestId: getByTestId2 } = render(<StoryAgentView {...mockProps} />);
+        floatingWindow = getByTestId2('agent-floating-window');
 
         // 4. Verify position is restored
         expect(floatingWindow).toHaveStyle({ left: '1000px', top: '500px' });
@@ -134,11 +134,11 @@ describe('StoryAgentView - Agent List Position', () => {
         const savedPos = { x: 3000, y: 200 };
         localStorage.setItem('story_agent_window_pos', JSON.stringify(savedPos));
 
-        const { container } = render(<StoryAgentView {...mockProps} />);
-        const floatingWindow = container.querySelector('.absolute.w-\\[350px\\]');
+        const { getByTestId } = render(<StoryAgentView {...mockProps} />);
+        const floatingWindow = getByTestId('agent-floating-window');
 
         // Should reset to default
-        // Default X = 1550, Y = 80
-        expect(floatingWindow).toHaveStyle({ left: '1550px', top: '80px' });
+        // Default X = 1500, Y = 80
+        expect(floatingWindow).toHaveStyle({ left: '1500px', top: '80px' });
     });
 });

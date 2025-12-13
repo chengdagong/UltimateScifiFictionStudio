@@ -6,7 +6,7 @@ import {
     Sparkles, Loader2,
     CheckCircle2, BookOpen, X,
     Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock,
-    ChevronUp, ChevronDown, ArrowRight, RotateCcw
+    ChevronUp, ChevronDown, ArrowRight, RotateCcw, ArrowLeft
 } from 'lucide-react';
 import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog, StoryArtifact } from '../types';
 import { executeAgentTask, executeReviewTask } from '../services/geminiService';
@@ -103,10 +103,13 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     // Notification State
     const [latestArtifact, setLatestArtifact] = useState<StoryArtifact | null>(null);
 
+    // Floating Window View State
+    const [agentWindowView, setAgentWindowView] = useState<'list' | 'edit'>('list');
+
     // Floating Window State - Initialize directly from localStorage to avoid flash
     const [agentWindowPos, setAgentWindowPos] = useState(() => {
         const savedPos = localStorage.getItem('story_agent_window_pos');
-        const width = 350;
+        const width = 400;
         const padding = 20;
         const defaultX = Math.max(20, window.innerWidth - width - padding);
         const defaultY = 80;
@@ -169,6 +172,21 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, [isDragging]);
+
+    // Adjust window position when switching to edit mode to prevent off-screen
+    useEffect(() => {
+        if (agentWindowView === 'edit') {
+            const width = 800;
+            const padding = 20;
+            // Check if current position + new width exceeds window width
+            if (agentWindowPos.x + width > window.innerWidth) {
+                setAgentWindowPos(prev => ({
+                    ...prev,
+                    x: Math.max(padding, window.innerWidth - width - padding)
+                }));
+            }
+        }
+    }, [agentWindowView]);
 
     useEffect(() => {
         if (agents.length === 0) {
@@ -802,55 +820,146 @@ ${contextText}
 
     );
 
-    const renderFloatingAgentWindow = () => (
-        <div
-            style={{ left: agentWindowPos.x, top: agentWindowPos.y }}
-            className="absolute w-[350px] h-[600px] max-h-[80vh] bg-white border border-slate-200 shadow-2xl rounded-xl flex flex-col z-40 overflow-hidden"
-        >
+    const renderFloatingAgentWindow = () => {
+        const isEditMode = agentWindowView === 'edit';
+        const windowWidth = isEditMode ? 'w-[800px]' : 'w-[400px]';
+
+        return (
             <div
-                onMouseDown={(e) => {
-                    setIsDragging(true);
-                    dragOffset.current = {
-                        x: e.clientX - agentWindowPos.x,
-                        y: e.clientY - agentWindowPos.y
-                    };
-                }}
-                className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between cursor-move select-none"
+                data-testid="agent-floating-window"
+                style={{ left: agentWindowPos.x, top: agentWindowPos.y }}
+                className={`absolute ${windowWidth} h-[600px] max-h-[80vh] bg-white border border-slate-200 shadow-2xl rounded-xl flex flex-col z-40 overflow-hidden transition-all duration-300 ease-in-out`}
             >
-                <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-indigo-500" />
-                    {t('story_copilot_tab_agents')}
-                </h3>
-            </div>
-            <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50">
-                <button
-                    onClick={() => {
-                        const newAgent: StoryAgent = { id: crypto.randomUUID(), name: '新 Agent', role: 'Role', systemPrompt: '', color: 'bg-slate-500', icon: 'Bot' };
-                        onUpdateAgents([...agents, newAgent]);
-                        setEditingAgent(newAgent);
-                        setViewMode('agent');
+                <div
+                    onMouseDown={(e) => {
+                        setIsDragging(true);
+                        dragOffset.current = {
+                            x: e.clientX - agentWindowPos.x,
+                            y: e.clientY - agentWindowPos.y
+                        };
                     }}
-                    className="w-full py-2 mb-3 border border-dashed border-indigo-300 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50"
+                    className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between cursor-move select-none shrink-0"
                 >
-                    {t('action_new_agent')}
-                </button>
-                <div className="space-y-2">
-                    {agents.map(agent => (
-                        <div key={agent.id} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2 group hover:border-indigo-300 hover:shadow-sm transition-all">
-                            <div className={`w-8 h-8 rounded flex items-center justify-center text-white ${agent.color}`}>
-                                <Bot className="w-4 h-4" />
+                    <h3 className="font-bold text-base text-slate-700 flex items-center gap-2">
+                        {isEditMode && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setAgentWindowView('list'); }}
+                                className="mr-2 text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded-full transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                        )}
+                        <Bot className="w-5 h-5 text-indigo-500" />
+                        {agentWindowView === 'list' ? t('story_copilot_tab_agents') : (editingAgent?.name || 'Edit Agent')}
+                    </h3>
+                </div>
+
+                <div className="flex-1 overflow-y-auto bg-slate-50">
+                    {agentWindowView === 'list' ? (
+                        <div className="p-4">
+                            <button
+                                onClick={() => {
+                                    const newAgent: StoryAgent = { id: crypto.randomUUID(), name: '新 Agent', role: 'Role', systemPrompt: '', color: 'bg-slate-500', icon: 'Bot' };
+                                    onUpdateAgents([...agents, newAgent]);
+                                    setEditingAgent(newAgent);
+                                    setAgentWindowView('edit');
+                                }}
+                                className="w-full py-3 mb-4 border border-dashed border-indigo-300 text-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <PlusCircle className="w-4 h-4" />
+                                {t('action_new_agent')}
+                            </button>
+                            <div className="space-y-3">
+                                {agents.map(agent => (
+                                    <div key={agent.id} className="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3 group hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer" onClick={() => { setEditingAgent(agent); setAgentWindowView('edit'); }}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white ${agent.color} shadow-sm`}>
+                                            <Bot className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-bold text-slate-800 truncate">{agent.name}</div>
+                                            <div className="text-xs text-slate-500 truncate">{agent.role}</div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setEditingAgent(agent); setAgentWindowView('edit'); }}
+                                            className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="text-xs font-bold truncate">{agent.name}</div>
-                                <div className="text-[10px] text-slate-500 truncate">{agent.role}</div>
-                            </div>
-                            <button onClick={() => { setEditingAgent(agent); setViewMode('agent'); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-600"><Edit className="w-3 h-3" /></button>
                         </div>
-                    ))}
+                    ) : (
+                        editingAgent && (
+                            <div className="p-6 space-y-6">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">名称</label>
+                                        <input
+                                            className="w-full border border-slate-300 p-3 text-sm rounded-xl focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:outline-none transition-all"
+                                            value={editingAgent.name}
+                                            onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })}
+                                            placeholder="给 Agent 起个名字"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">角色</label>
+                                        <input
+                                            className="w-full border border-slate-300 p-3 text-sm rounded-xl focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:outline-none transition-all"
+                                            value={editingAgent.role}
+                                            onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })}
+                                            placeholder="定义 Agent 的角色"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">System Prompt (核心指令)</label>
+                                    <textarea
+                                        className="w-full border border-slate-300 p-4 text-sm rounded-xl h-64 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 focus:outline-none font-mono resize-none leading-relaxed"
+                                        value={editingAgent.systemPrompt}
+                                        onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })}
+                                        placeholder="在这里定义 Agent 的行为模式、语气和专业领域..."
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-3 block">标识颜色</label>
+                                    <div className="flex gap-3 flex-wrap bg-white p-4 rounded-xl border border-slate-200">
+                                        {['bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'].map(c => (
+                                            <button
+                                                key={c}
+                                                onClick={() => setEditingAgent({ ...editingAgent, color: c })}
+                                                className={`w-8 h-8 rounded-full ${c} transition-all ${editingAgent.color === c ? 'ring-4 ring-offset-2 ring-slate-200 scale-110 shadow-md' : 'hover:scale-110 hover:shadow-sm'}`}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 flex justify-end gap-3">
+                                    <button
+                                        onClick={() => setAgentWindowView('list')}
+                                        className="px-6 py-2.5 border border-slate-300 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all"
+                                    >
+                                        取消
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a));
+                                            setAgentWindowView('list');
+                                        }}
+                                        className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 hover:shadow-xl transition-all"
+                                    >
+                                        保存更改
+                                    </button>
+                                </div>
+                            </div>
+                        )
+                    )}
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     // Toast Notification Component
     const renderNotification = () => {
@@ -984,59 +1093,6 @@ ${contextText}
                     </div>
                 )}
 
-                {viewMode === 'agent' && editingAgent && (
-                    <div className="flex-1 flex flex-col h-full bg-white animate-fadeIn">
-                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
-                            <h3 className="font-bold text-lg text-slate-800">{t('modal_edit_agent')}</h3>
-                            <button onClick={() => { setEditingAgent(null); setViewMode('segment'); }} className="text-slate-400 hover:text-slate-600">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 overflow-y-auto max-w-3xl mx-auto w-full space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">名称</label>
-                                    <input className="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-indigo-200 focus:outline-none" value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} placeholder="名称" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">角色</label>
-                                    <input className="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-indigo-200 focus:outline-none" value={editingAgent.role} onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })} placeholder="角色" />
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">System Prompt</label>
-                                <textarea className="w-full border p-3 text-sm rounded-lg h-64 focus:ring-2 focus:ring-indigo-200 focus:outline-none font-mono" value={editingAgent.systemPrompt} onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })} placeholder="System Prompt..." />
-                            </div>
-
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">标识颜色</label>
-                                <div className="flex gap-3 flex-wrap">
-                                    {['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'].map(c => (
-                                        <button
-                                            key={c}
-                                            onClick={() => setEditingAgent({ ...editingAgent, color: c })}
-                                            className={`w-8 h-8 rounded-full ${c} transition-all ${editingAgent.color === c ? 'ring-4 ring-offset-2 ring-slate-200 scale-110' : 'hover:scale-110'}`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-100 flex justify-end">
-                                <button
-                                    onClick={() => {
-                                        onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a));
-                                        setEditingAgent(null);
-                                        setViewMode('segment');
-                                    }}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200"
-                                >
-                                    保存 Agent 配置
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
             {renderFloatingAgentWindow()}
         </div>
