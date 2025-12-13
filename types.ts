@@ -195,6 +195,7 @@ export interface StepExecutionLog {
     verdict?: 'PASS' | 'FAIL';
   }[];
   error?: string;
+  logs?: string[];
 }
 
 // --- Git Types ---
