@@ -51,12 +51,12 @@ function generateSlug(name) {
         .replace(/\s+/g, '-')
         .replace(/-+/g, '-')
         .substring(0, 50);
-    
+
     // If contains Chinese characters, use base64url encoding
     if (/[\u4e00-\u9fa5]/.test(slug)) {
         slug = Base64.encodeURI(name).substring(0, 20);
     }
-    
+
     return slug || 'untitled-project';
 }
 
@@ -69,7 +69,7 @@ function createProjectStructure(projectDir) {
         path.join(projectDir, 'artifacts', 'items'),
         path.join(projectDir, 'agents')
     ];
-    
+
     dirs.forEach(dir => {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
@@ -94,19 +94,19 @@ function initializeProjectFiles(projectDir, projectData, slug) {
         path.join(projectDir, 'project.json'),
         JSON.stringify(projectMeta, null, 2)
     );
-    
+
     // context.md
     fs.writeFileSync(
         path.join(projectDir, 'context.md'),
         projectData.context || '# 世界背景\n\n'
     );
-    
+
     // chronicle.md
     fs.writeFileSync(
         path.join(projectDir, 'chronicle.md'),
         projectData.chronicleText || '# 编年史\n\n'
     );
-    
+
     // world/entities.json
     fs.writeFileSync(
         path.join(projectDir, 'world', 'entities.json'),
@@ -116,7 +116,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             entities: projectData.model?.entities || []
         }, null, 2)
     );
-    
+
     // world/relationships.json
     fs.writeFileSync(
         path.join(projectDir, 'world', 'relationships.json'),
@@ -126,7 +126,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             relationships: projectData.model?.relationships || []
         }, null, 2)
     );
-    
+
     // world/entity-states.json
     fs.writeFileSync(
         path.join(projectDir, 'world', 'entity-states.json'),
@@ -136,7 +136,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             entityStates: projectData.model?.entityStates || []
         }, null, 2)
     );
-    
+
     // world/technologies.json
     fs.writeFileSync(
         path.join(projectDir, 'world', 'technologies.json'),
@@ -146,7 +146,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             technologies: projectData.model?.technologies || []
         }, null, 2)
     );
-    
+
     // world/tech-dependencies.json
     fs.writeFileSync(
         path.join(projectDir, 'world', 'tech-dependencies.json'),
@@ -156,7 +156,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             dependencies: projectData.model?.techDependencies || []
         }, null, 2)
     );
-    
+
     // stories/_index.json
     const segments = (projectData.storySegments || []).map(seg => ({
         id: seg.id,
@@ -172,7 +172,7 @@ function initializeProjectFiles(projectDir, projectData, slug) {
             segments
         }, null, 2)
     );
-    
+
     // stories/segments/*.md
     (projectData.storySegments || []).forEach(seg => {
         const frontmatter = `---
@@ -187,7 +187,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             frontmatter + seg.content
         );
     });
-    
+
     // artifacts/_index.json
     const artifacts = (projectData.artifacts || []).map(art => ({
         id: art.id,
@@ -205,7 +205,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             artifacts
         }, null, 2)
     );
-    
+
     // artifacts/items/*.md
     (projectData.artifacts || []).forEach(art => {
         const ext = art.type === 'json' ? '.json' : '.md';
@@ -214,7 +214,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             art.content
         );
     });
-    
+
     // agents/agents.json
     fs.writeFileSync(
         path.join(projectDir, 'agents', 'agents.json'),
@@ -224,7 +224,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             agents: projectData.agents || []
         }, null, 2)
     );
-    
+
     // agents/workflow.json
     fs.writeFileSync(
         path.join(projectDir, 'agents', 'workflow.json'),
@@ -234,7 +234,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             steps: projectData.workflow || []
         }, null, 2)
     );
-    
+
     return projectMeta;
 }
 
@@ -244,11 +244,11 @@ function readProjectData(projectDir) {
     const projectMeta = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'project.json'), 'utf8')
     );
-    
+
     // Read context.md and chronicle.md
     const context = fs.readFileSync(path.join(projectDir, 'context.md'), 'utf8');
     const chronicleText = fs.readFileSync(path.join(projectDir, 'chronicle.md'), 'utf8');
-    
+
     // Read world model files
     const entities = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'world', 'entities.json'), 'utf8')
@@ -265,7 +265,7 @@ function readProjectData(projectDir) {
     const techDependencies = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'world', 'tech-dependencies.json'), 'utf8')
     );
-    
+
     // Read stories
     const storiesIndex = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'stories', '_index.json'), 'utf8')
@@ -273,10 +273,10 @@ function readProjectData(projectDir) {
     const storySegments = storiesIndex.segments.map(seg => {
         const segmentPath = path.join(projectDir, 'stories', seg.file);
         let content = fs.readFileSync(segmentPath, 'utf8');
-        
+
         // Remove frontmatter
         content = content.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
-        
+
         return {
             id: seg.id,
             timestamp: seg.timestamp,
@@ -284,7 +284,7 @@ function readProjectData(projectDir) {
             content
         };
     });
-    
+
     // Read artifacts
     const artifactsIndex = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'artifacts', '_index.json'), 'utf8')
@@ -293,7 +293,7 @@ function readProjectData(projectDir) {
         const ext = art.type === 'json' ? '.json' : '.md';
         const artPath = path.join(projectDir, 'artifacts', 'items', `${art.id}${ext}`);
         const content = fs.readFileSync(artPath, 'utf8');
-        
+
         return {
             id: art.id,
             title: art.title,
@@ -303,7 +303,7 @@ function readProjectData(projectDir) {
             content
         };
     });
-    
+
     // Read agents and workflow
     const agentsData = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'agents', 'agents.json'), 'utf8')
@@ -311,7 +311,7 @@ function readProjectData(projectDir) {
     const workflowData = JSON.parse(
         fs.readFileSync(path.join(projectDir, 'agents', 'workflow.json'), 'utf8')
     );
-    
+
     // Assemble WorldData format
     return {
         id: projectMeta.id,
@@ -340,7 +340,7 @@ function readProjectData(projectDir) {
 function updateProjectFiles(projectDir, worldData) {
     console.log(`[updateProjectFiles] Starting update for project: ${worldData.name || 'Unknown'}`);
     console.log(`[updateProjectFiles] worldData keys:`, Object.keys(worldData || {}));
-    
+
     // Update project.json lastModified
     const projectPath = path.join(projectDir, 'project.json');
     const projectMeta = JSON.parse(fs.readFileSync(projectPath, 'utf8'));
@@ -349,19 +349,19 @@ function updateProjectFiles(projectDir, worldData) {
     projectMeta.frameworkId = worldData.frameworkId;
     projectMeta.currentTimeSetting = worldData.currentTimeSetting;
     fs.writeFileSync(projectPath, JSON.stringify(projectMeta, null, 2));
-    
+
     // Update context.md
     fs.writeFileSync(
         path.join(projectDir, 'context.md'),
         worldData.context || '# 世界背景\n\n'
     );
-    
+
     // Update chronicle.md
     fs.writeFileSync(
         path.join(projectDir, 'chronicle.md'),
         worldData.chronicleText || '# 编年史\n\n'
     );
-    
+
     // Update world model files
     const model = worldData.model || {};
     console.log(`[updateProjectFiles] Model data:`, {
@@ -380,7 +380,7 @@ function updateProjectFiles(projectDir, worldData) {
             entities: model.entities || []
         }, null, 2)
     );
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'world', 'relationships.json'),
         JSON.stringify({
@@ -389,7 +389,7 @@ function updateProjectFiles(projectDir, worldData) {
             relationships: model.relationships || []
         }, null, 2)
     );
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'world', 'entity-states.json'),
         JSON.stringify({
@@ -398,7 +398,7 @@ function updateProjectFiles(projectDir, worldData) {
             entityStates: model.entityStates || []
         }, null, 2)
     );
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'world', 'technologies.json'),
         JSON.stringify({
@@ -407,7 +407,7 @@ function updateProjectFiles(projectDir, worldData) {
             technologies: model.technologies || []
         }, null, 2)
     );
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'world', 'tech-dependencies.json'),
         JSON.stringify({
@@ -416,7 +416,7 @@ function updateProjectFiles(projectDir, worldData) {
             dependencies: model.techDependencies || []
         }, null, 2)
     );
-    
+
     // Update stories
     console.log(`[updateProjectFiles] Story segments:`, {
         hasStorySegments: !!worldData.storySegments,
@@ -428,7 +428,7 @@ function updateProjectFiles(projectDir, worldData) {
         influencedBy: seg.influencedBy,
         file: `segments/${seg.id}.md`
     }));
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'stories', '_index.json'),
         JSON.stringify({
@@ -437,7 +437,7 @@ function updateProjectFiles(projectDir, worldData) {
             segments
         }, null, 2)
     );
-    
+
     // Clear old segments and write new ones
     const segmentsDir = path.join(projectDir, 'stories', 'segments');
     if (fs.existsSync(segmentsDir)) {
@@ -445,7 +445,7 @@ function updateProjectFiles(projectDir, worldData) {
             fs.unlinkSync(path.join(segmentsDir, file));
         });
     }
-    
+
     (worldData.storySegments || []).forEach(seg => {
         const frontmatter = `---
 id: ${seg.id}
@@ -459,7 +459,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             frontmatter + seg.content
         );
     });
-    
+
     // Update artifacts
     console.log(`[updateProjectFiles] Artifacts:`, {
         hasArtifacts: !!worldData.artifacts,
@@ -473,7 +473,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
         createdAt: art.createdAt,
         file: `items/${art.id}.md`
     }));
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'artifacts', '_index.json'),
         JSON.stringify({
@@ -482,7 +482,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             artifacts
         }, null, 2)
     );
-    
+
     // Clear old artifacts and write new ones
     const itemsDir = path.join(projectDir, 'artifacts', 'items');
     if (fs.existsSync(itemsDir)) {
@@ -490,7 +490,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             fs.unlinkSync(path.join(itemsDir, file));
         });
     }
-    
+
     (worldData.artifacts || []).forEach(art => {
         const ext = art.type === 'json' ? '.json' : '.md';
         fs.writeFileSync(
@@ -498,7 +498,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             art.content
         );
     });
-    
+
     // Update agents and workflow
     fs.writeFileSync(
         path.join(projectDir, 'agents', 'agents.json'),
@@ -508,7 +508,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             agents: worldData.agents || []
         }, null, 2)
     );
-    
+
     fs.writeFileSync(
         path.join(projectDir, 'agents', 'workflow.json'),
         JSON.stringify({
@@ -517,7 +517,7 @@ influencedBy: ${JSON.stringify(seg.influencedBy)}
             steps: worldData.workflow || []
         }, null, 2)
     );
-    
+
     console.log(`[updateProjectFiles] Update completed successfully for project: ${worldData.name}`);
 }
 
@@ -537,8 +537,8 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
-        res.writeHead(204); 
-        res.end(); 
+        res.writeHead(204);
+        res.end();
         return;
     }
 
@@ -550,24 +550,24 @@ const server = http.createServer(async (req, res) => {
             try {
                 const { username, password } = JSON.parse(body);
                 if (!username || !password) {
-                    res.writeHead(400); 
-                    res.end(JSON.stringify({ error: 'Missing fields' })); 
+                    res.writeHead(400);
+                    res.end(JSON.stringify({ error: 'Missing fields' }));
                     return;
                 }
 
                 const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
                 if (users.find(u => u.username === username)) {
-                    res.writeHead(409); 
-                    res.end(JSON.stringify({ error: 'User exists' })); 
+                    res.writeHead(409);
+                    res.end(JSON.stringify({ error: 'User exists' }));
                     return;
                 }
 
                 const hash = await hashPassword(password);
-                const newUser = { 
-                    id: Date.now().toString(), 
-                    username, 
-                    hash, 
-                    createdAt: Date.now() 
+                const newUser = {
+                    id: Date.now().toString(),
+                    username,
+                    hash,
+                    createdAt: Date.now()
                 };
                 users.push(newUser);
                 fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
@@ -576,10 +576,10 @@ const server = http.createServer(async (req, res) => {
                 const userDir = path.join(__dirname, 'data', 'users', username, 'projects');
                 fs.mkdirSync(userDir, { recursive: true });
 
-                res.writeHead(201); 
+                res.writeHead(201);
                 res.end(JSON.stringify({ success: true, username }));
             } catch (e) {
-                res.writeHead(500); 
+                res.writeHead(500);
                 res.end(JSON.stringify({ error: e.message }));
             }
         });
@@ -597,21 +597,38 @@ const server = http.createServer(async (req, res) => {
                 const user = users.find(u => u.username === username);
 
                 if (!user || !(await verifyPassword(password, user.hash))) {
-                    res.writeHead(401); 
-                    res.end(JSON.stringify({ error: 'Invalid credentials' })); 
+                    res.writeHead(401);
+                    res.end(JSON.stringify({ error: 'Invalid credentials' }));
                     return;
                 }
 
                 const token = crypto.randomBytes(32).toString('hex');
                 SESSIONS[token] = username;
 
-                res.writeHead(200); 
+                res.writeHead(200);
                 res.end(JSON.stringify({ token, username }));
             } catch (e) {
-                res.writeHead(500); 
+                res.writeHead(500);
                 res.end(JSON.stringify({ error: e.message }));
             }
         });
+        return;
+    }
+
+    // Auth: Verify Token
+    if (req.url === '/api/auth/verify' && req.method === 'GET') {
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            const username = SESSIONS[token];
+            if (username) {
+                res.writeHead(200);
+                res.end(JSON.stringify({ username }));
+                return;
+            }
+        }
+        res.writeHead(401);
+        res.end(JSON.stringify({ error: 'Invalid token' }));
         return;
     }
 
@@ -624,7 +641,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ==================== NEW PROJECT APIs ====================
-    
+
     // GET /api/projects - List all projects
     if (req.url === '/api/projects' && req.method === 'GET') {
         if (!currentUser) {
@@ -704,7 +721,7 @@ const server = http.createServer(async (req, res) => {
                 // Auto-initialize Git repository for the project
                 try {
                     await execAsync('git init', { cwd: projectDir });
-                    
+
                     // Create .gitignore
                     const gitignoreContent = `# Temporary files
 *.tmp
@@ -718,7 +735,7 @@ const server = http.createServer(async (req, res) => {
 *.log
 `;
                     fs.writeFileSync(path.join(projectDir, '.gitignore'), gitignoreContent);
-                    
+
                     console.log(`[POST /api/projects] Git repository initialized for project: ${slug}`);
                 } catch (gitErr) {
                     console.warn(`[POST /api/projects] Failed to initialize Git for project ${slug}:`, gitErr);
@@ -778,7 +795,7 @@ const server = http.createServer(async (req, res) => {
             try {
                 const projectId = req.url.split('/')[3];
                 const projectDir = path.join(__dirname, 'data', 'users', currentUser, 'projects', projectId);
-                
+
                 console.log(`[PUT /api/projects/${projectId}] Update request from user: ${currentUser}`);
 
                 if (!fs.existsSync(projectDir)) {
@@ -854,7 +871,7 @@ const server = http.createServer(async (req, res) => {
             }
 
             await execAsync('git init', { cwd: projectDir });
-            
+
             // Create .gitignore
             const gitignoreContent = `# Temporary files
 *.tmp
@@ -897,7 +914,7 @@ const server = http.createServer(async (req, res) => {
             }
 
             const { stdout, stderr } = await execAsync('git status --porcelain', { cwd: projectDir });
-            
+
             const changes = stdout.split('\n').filter(Boolean).map(line => {
                 const status = line.substring(0, 2).trim();
                 const filepath = line.substring(3);
@@ -937,7 +954,7 @@ const server = http.createServer(async (req, res) => {
 
                 const { message } = JSON.parse(body || '{}');
                 const commitMsg = message || 'Update';
-                
+
                 await execAsync('git add .', { cwd: projectDir });
                 await execAsync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { cwd: projectDir });
 
@@ -970,7 +987,7 @@ const server = http.createServer(async (req, res) => {
             }
 
             const { stdout } = await execAsync('git log --pretty=format:"%h|%an|%s|%ad" --date=iso -n 10', { cwd: projectDir });
-            
+
             const logs = stdout.split('\n').filter(Boolean).map(line => {
                 const [hash, author, message, date] = line.split('|');
                 return { hash, author, message, date };
@@ -1154,7 +1171,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ==================== LEGACY Git APIs (workspace-level) ====================
-    
+
     if (req.url === '/api/git/init' && req.method === 'POST') {
         if (!currentUser) {
             res.writeHead(401);

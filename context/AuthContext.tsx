@@ -7,6 +7,7 @@ interface AuthContextType {
     login: (username: string, token: string) => void;
     logout: () => void;
     isAuthenticated: boolean;
+    isInitializing: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -23,6 +24,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return savedToken;
     });
+
+    const [isInitializing, setIsInitializing] = useState<boolean>(() => {
+        return !!localStorage.getItem('token');
+    });
+
+    useEffect(() => {
+        const verifyToken = async () => {
+            if (token) {
+                try {
+                    // Temporarily set header if not set (though useState should have set it)
+                    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                    await axios.get('/api/auth/verify');
+                } catch (error) {
+                    console.warn("Token verification failed, logging out...");
+                    logout();
+                } finally {
+                    setIsInitializing(false);
+                }
+            } else {
+                setIsInitializing(false);
+            }
+        };
+
+        verifyToken();
+    }, []); // Only run on mount
 
     useEffect(() => {
         if (token) {
@@ -45,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         localStorage.setItem('token', newToken);
         localStorage.setItem('user', username);
-        
+
         // 然后更新 React 状态
         setUser(username);
         setToken(newToken);
@@ -54,10 +80,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = () => {
         setUser(null);
         setToken(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        delete axios.defaults.headers.common['Authorization'];
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+        <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token, isInitializing }}>
             {children}
         </AuthContext.Provider>
     );

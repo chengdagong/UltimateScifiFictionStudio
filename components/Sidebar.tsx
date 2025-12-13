@@ -112,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
          </div>
 
-         {/* WORLD ENGINE SECTION */}
+         {/* WORLD ENGINE SECTION - HIDDEN TEMPORARILY
          <div className={`mt-4 ${isMinimalUI ? '' : 'px-3'}`}>
             {!isMinimalUI && <p className="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t('section_world')}</p>}
 
@@ -161,6 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                {!isMinimalUI && t('nav_chronicle')}
             </button>
          </div>
+         */}
 
          {/* STORY ENGINE SECTION */}
          <div className={`mt-6 ${isMinimalUI ? '' : 'px-3'}`}>

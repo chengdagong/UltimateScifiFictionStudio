@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WorldData, WorldModel, StorySegment, ApiSettings } from '../types';
 // import { saveWorld, getWorlds, deleteWorld } from '../services/firebase';
-import { saveProject, createProject, getProjects, deleteProject, commitProject } from '../services/LocalStorageService';
+import { saveProject, createProject, getProjects, getProject, deleteProject, commitProject } from '../services/LocalStorageService';
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
@@ -61,6 +61,42 @@ export const usePersistence = ({
         // Don't refetch automatically on window focus to avoid screen jumping if user is editing
         refetchOnWindowFocus: false
     });
+
+    // Added: Import getProject to validate ID
+    // 自动恢复上次会话
+    useEffect(() => {
+        const restoreSession = async () => {
+            const lastWorldId = localStorage.getItem('last_world_id');
+            if (lastWorldId && !currentWorldId && !isGeneratingWorld) {
+                try {
+                    console.log("Attempting to restore session for world:", lastWorldId);
+                    const world = await getProject(lastWorldId);
+                    if (world) {
+                        handleLoadWorld(world, { preserveTab: true });
+                        console.log("Session restored successfully.");
+                    } else {
+                        console.warn("Last world ID valid but returned null (deleted?), clearing cache.");
+                        localStorage.removeItem('last_world_id');
+                    }
+                } catch (e) {
+                    console.warn("Failed to restore last world (likely deleted), clearing cache.", e);
+                    localStorage.removeItem('last_world_id');
+                }
+            }
+        };
+
+        // Only run once on mount (or when user auth changes)
+        if (user) {
+            restoreSession();
+        }
+    }, [user]); // Depend on user to ensure we are logged in
+
+    // Persist currentWorldId to localStorage
+    useEffect(() => {
+        if (currentWorldId) {
+            localStorage.setItem('last_world_id', currentWorldId);
+        }
+    }, [currentWorldId]);
 
     // Helper: Construct World Data Object
     const constructWorldData = (): WorldData => {
@@ -158,7 +194,7 @@ export const usePersistence = ({
 
         // Prevent auto-save if unnamed (user must name their world)
         if (!worldName) return;
-        
+
         // Prevent auto-save if no currentWorldId (project doesn't exist yet)
         if (!currentWorldId) return;
 
@@ -201,7 +237,7 @@ export const usePersistence = ({
     const createEmptyMutation = useMutation({
         mutationFn: async (name: string) => {
             setGenerationStatus(`正在初始化新世界...`);
-            
+
             // Construct initial empty world data (without ID - let backend generate it)
             const newWorld: WorldData = {
                 id: undefined,
@@ -226,12 +262,12 @@ export const usePersistence = ({
         onSuccess: (newWorld) => {
             worldModel.resetModel(INITIAL_CONTEXTS['general']);
             storyEngine.resetStoryEngine();
-            
+
             setCurrentWorldId(newWorld.id);
             setWorldName(newWorld.name);
-            
+
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
-            
+
             setActiveTab('participants');
             setShowNewWorldModal(false);
         }
@@ -242,7 +278,7 @@ export const usePersistence = ({
         mutationFn: async ({ importText, name }: { importText: string; name: string }) => {
             setGenerationStatus("正在深度分析文本架构...");
             const result = await importWorldFromText(importText, apiSettings);
-            
+
             // Construct and save (without ID - let backend generate it)
             const newWorld: WorldData = {
                 id: undefined,
@@ -280,13 +316,13 @@ export const usePersistence = ({
             worldModel.setWorldContext(newWorld.context);
             worldModel.setModel(newWorld.model);
             worldModel.setStorySegments(newWorld.storySegments);
-            
+
             setWorldName(newWorld.name);
             setCurrentWorldId(newWorld.id);
-            
+
             storyEngine.resetStoryEngine();
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
-            
+
             setActiveTab('story');
             setShowNewWorldModal(false);
         },
@@ -302,7 +338,7 @@ export const usePersistence = ({
             setGenerationStatus(`正在构建【${preset.name}】的历史背景...`);
             const framework = FRAMEWORKS[preset.frameworkId];
             const result = await generateWorldFromScenario(preset.scenarioPrompt, framework, apiSettings);
-            
+
             const newWorld: WorldData = {
                 id: undefined,
                 name: name,
@@ -331,7 +367,7 @@ export const usePersistence = ({
         onSuccess: (newWorld) => {
             worldModel.resetModel(INITIAL_CONTEXTS[newWorld.frameworkId]);
             storyEngine.resetStoryEngine();
-            
+
             setGenerationStatus("正在完善社会关系与历史图谱...");
 
             worldModel.setWorldContext(newWorld.context);
@@ -341,7 +377,7 @@ export const usePersistence = ({
 
             setWorldName(newWorld.name);
             setCurrentWorldId(newWorld.id);
-            
+
             queryClient.invalidateQueries({ queryKey: ['worlds'] });
 
             setActiveTab('timeline');
@@ -378,7 +414,7 @@ export const usePersistence = ({
         await refetchWorldList();
     };
 
-    const handleLoadWorld = (world: WorldData) => {
+    const handleLoadWorld = (world: WorldData, { preserveTab } = { preserveTab: false }) => {
         setCurrentWorldId(world.id);
         setWorldName(world.name);
 
@@ -398,7 +434,9 @@ export const usePersistence = ({
         storyEngine.setExecutionLogs({});
 
         setShowLoadModal(false);
-        setActiveTab('participants');
+        if (!preserveTab) {
+            setActiveTab('participants');
+        }
     };
 
     const handleDeleteWorld = (id: string) => {
@@ -446,7 +484,7 @@ export const usePersistence = ({
         handleCreateEmptyWorld,
         handleSaveWorld: handleCommit,
         handleLoadWorldList,
-        handleLoadWorld,
+        handleLoadWorld: (world: WorldData) => handleLoadWorld(world),
         handleDeleteWorld,
         handleImportWorld,
         handleApplyPreset

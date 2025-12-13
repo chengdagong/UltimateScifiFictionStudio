@@ -35,13 +35,23 @@ import { useAiTaskManager } from '../hooks/useAiTaskManager';
 
 export const MainLayout: React.FC = () => {
    // App UI State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks' | 'git'>('participants');
+   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks' | 'git'>(() => {
+      // Restore last active tab from localStorage, default to 'participants'
+      return (localStorage.getItem('active_tab') as any) || 'participants';
+   });
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
-   const { user, login, logout, isAuthenticated } = useAuth();
+   const { user, login, logout, isAuthenticated, isInitializing } = useAuth();
    const { t, i18n } = useTranslation();
+
+   // Persist activeTab to localStorage
+   useEffect(() => {
+      localStorage.setItem('active_tab', activeTab);
+   }, [activeTab]);
+
+
 
    const toggleLanguage = () => {
       const newLang = i18n.language === 'zh' ? 'en' : 'zh';
@@ -99,31 +109,31 @@ export const MainLayout: React.FC = () => {
    // Wrappers for world creation that apply the name
    const handleCreateEmptyWithName = async (name: string) => {
       await persistence.handleLoadWorldList();
-      
+
       if (isNameConflict(name)) {
          throw new Error("该名称已存在，请使用其他名称");
       }
-      
+
       await persistence.handleCreateEmptyWorld(name);
    };
 
    const handleImportWithName = async (text: string, name: string) => {
       await persistence.handleLoadWorldList();
-      
+
       if (isNameConflict(name)) {
          throw new Error("该名称已存在，请使用其他名称");
       }
-      
+
       await persistence.handleImportWorld(text, name);
    };
 
    const handleApplyPresetWithName = async (preset: any, name: string) => {
       await persistence.handleLoadWorldList();
-      
+
       if (isNameConflict(name)) {
          throw new Error("该名称已存在，请使用其他名称");
       }
-      
+
       await persistence.handleApplyPreset(preset, name);
    };
 
@@ -176,6 +186,20 @@ export const MainLayout: React.FC = () => {
          }, 1500);
       }
    };
+
+   // --- Conditional Rendering for Splash Screen ---
+   // Must be placed after all hooks are called
+   if (isInitializing) {
+      return (
+         <div className="flex flex-col h-screen bg-slate-900 text-white items-center justify-center">
+            <div className="w-16 h-16 bg-indigo-500 rounded-2xl flex items-center justify-center animate-bounce mb-4 shadow-xl shadow-indigo-500/50">
+               <span className="font-serif text-3xl font-bold">E</span>
+            </div>
+            <h2 className="text-xl font-medium animate-pulse">EcoNarrative Studio</h2>
+            <p className="text-slate-400 text-sm mt-2">Checking Neural Link...</p>
+         </div>
+      );
+   }
 
    return (
       <div className="flex flex-col h-screen bg-slate-100 text-slate-800 font-sans overflow-hidden">
