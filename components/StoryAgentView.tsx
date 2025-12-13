@@ -6,7 +6,7 @@ import {
     Sparkles, Loader2,
     CheckCircle2, BookOpen, X,
     Sidebar, PlusCircle, BookText, Lightbulb, PenTool, Clock,
-    ChevronUp, ChevronDown, ArrowRight
+    ChevronUp, ChevronDown, ArrowRight, RotateCcw
 } from 'lucide-react';
 import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog, StoryArtifact } from '../types';
 import { executeAgentTask, executeReviewTask } from '../services/geminiService';
@@ -252,7 +252,10 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             // Iteration Loop (Internal to the step)
             while (!isApproved && currentRound <= maxRetries + 1) {
                 const status = currentRound > 1 ? 'revising' : 'generating';
-                onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } })); // Updated
+                onUpdateExecutionLogs(prev => {
+                    const currentLog = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                    return { ...prev, [step.id]: { ...currentLog, status } };
+                });
 
                 // 1. Generate
                 content = await executeAgentTask(
@@ -268,9 +271,9 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 );
 
                 // Update Log
-                onUpdateExecutionLogs(prev => { // Updated
-                    const logs = prev[step.id]!;
-                    const newAttempts = [...logs.attempts];
+                onUpdateExecutionLogs(prev => {
+                    const logs = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                    const newAttempts = logs.attempts ? [...logs.attempts] : [];
                     if (newAttempts[currentRound - 1]) newAttempts[currentRound - 1].output = content;
                     else newAttempts.push({ round: currentRound, output: content });
                     return { ...prev, [step.id]: { ...logs, content, attempts: newAttempts } };
@@ -278,13 +281,20 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
                 // 2. Validate (if needed)
                 if (step.validation) {
-                    onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } })); // Updated
+                    onUpdateExecutionLogs(prev => {
+                        const currentLog = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                        return { ...prev, [step.id]: { ...currentLog, status: 'reviewing' } };
+                    });
+                    
                     const reviewer = getAgentById(step.validation.reviewerId);
                     const reviewResult = await executeReviewTask(reviewer, content, step.validation.criteria, model, framework, worldContext, settings);
 
-                    onUpdateExecutionLogs(prev => { // Updated
-                        const logs = prev[step.id]!;
-                        const newAttempts = [...logs.attempts];
+                    onUpdateExecutionLogs(prev => {
+                        const logs = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                        const newAttempts = logs.attempts ? [...logs.attempts] : [];
+                        if (!newAttempts[currentRound - 1]) {
+                             newAttempts.push({ round: currentRound, output: content });
+                        }
                         newAttempts[currentRound - 1].critique = reviewResult.feedback;
                         newAttempts[currentRound - 1].verdict = reviewResult.verdict;
                         return { ...prev, [step.id]: { ...logs, attempts: newAttempts } };
@@ -300,7 +310,10 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 }
             }
 
-            onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } })); // Updated
+            onUpdateExecutionLogs(prev => {
+                const currentLog = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                return { ...prev, [step.id]: { ...currentLog, status: 'completed' } };
+            });
 
             // Initial save of the output to editable state
             onUpdateStepOutputs(prev => ({ ...prev, [step.id]: content })); // Updated
@@ -331,30 +344,23 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
         } catch (e: any) {
             console.error(e);
-            onUpdateExecutionLogs(prev => ({ // Updated
-                ...prev,
-                [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
-            }));
+            onUpdateExecutionLogs(prev => {
+                const currentLog = prev[step.id] || { status: 'generating', content: '', attempts: [] };
+                return {
+                    ...prev,
+                    [step.id]: { ...currentLog, status: 'failed', error: e.message }
+                };
+            });
 
             if (taskId && taskManager) {
                 taskManager.failTask(taskId, e.message);
             }
 
             onUpdateWorkflowStatus('paused'); // Allow retry?
-            alert(`Step Failed: ${e.message}`);
         }
     };
 
-    const handleStartWorkflow = () => {
-        if (!settings.apiKey) return alert("Please configure API Key first"); // Keep basic alert or i18n? 'brainstorm_api_key_override' implies awareness. Let's start with basic.
-        if (!storyGuidance.trim()) return alert("Please enter story directive");
-
-        // Reset
-        onUpdateExecutionLogs({}); // Updated
-        onUpdateStepOutputs({}); // Updated
-        onUpdateCurrentStepIndex(-1); // Updated
-
-        // Prepare initial context
+    const getInitialInput = () => {
         let contextSegments = storySegments;
         if (selectedSegment) {
             const idx = storySegments.findIndex(s => s.id === selectedSegmentId);
@@ -364,14 +370,33 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
             ? `【前情提要】:\n${contextSegments[contextSegments.length - 1].content.slice(-2000)}`
             : "这是故事的开篇。";
 
-        const initialInput = `
+        return `
 ${contextText}
 
 【本章核心指令 (User Directive)】:
 "${storyGuidance}"
 `;
+    };
+
+    const handleStartWorkflow = () => {
+        if (!settings.apiKey) return alert("Please configure API Key first");
+        if (!storyGuidance.trim()) return alert("Please enter story directive");
+
+        // Reset
+        onUpdateExecutionLogs({});
+        onUpdateStepOutputs({});
+        onUpdateCurrentStepIndex(-1);
+
         // Start Step 0
-        executeStep(0, initialInput);
+        executeStep(0, getInitialInput());
+    };
+
+    const handleRetry = () => {
+        if (currentStepIndex < 0) return;
+        const input = currentStepIndex === 0
+            ? getInitialInput()
+            : stepOutputs[workflow[currentStepIndex - 1].id] || "";
+        executeStep(currentStepIndex, input);
     };
 
     const handleContinue = (fromIndex: number) => {
@@ -421,19 +446,40 @@ ${contextText}
                                     disabled={workflowStatus === 'running'}
                                 />
                             </div>
-                            {workflowStatus === 'idle' || workflowStatus === 'completed' ? (
-                                <button
-                                    onClick={handleStartWorkflow}
-                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2"
-                                >
-                                    <Play className="w-4 h-4" /> {t('action_start_workflow')}
-                                </button>
-                            ) : (
-                                <div className="w-full py-2 bg-slate-100 text-slate-500 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
-                                    {workflowStatus === 'running' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-                                    {workflowStatus === 'running' ? t('workflow_status_running') : t('workflow_status_waiting')}
-                                </div>
-                            )}
+                            {(() => {
+                                const currentStep = workflow[currentStepIndex];
+                                const currentLog = currentStep ? executionLogs[currentStep.id] : null;
+                                const isFailed = currentLog?.status === 'failed';
+
+                                if (isFailed) {
+                                    return (
+                                        <button
+                                            onClick={handleRetry}
+                                            className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+                                        >
+                                            <RotateCcw className="w-4 h-4" /> 重试当前步骤
+                                        </button>
+                                    );
+                                }
+
+                                if (workflowStatus === 'idle' || workflowStatus === 'completed') {
+                                    return (
+                                        <button
+                                            onClick={handleStartWorkflow}
+                                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2"
+                                        >
+                                            <Play className="w-4 h-4" /> {t('action_start_workflow')}
+                                        </button>
+                                    );
+                                }
+
+                                return (
+                                    <div className="w-full py-2 bg-slate-100 text-slate-500 rounded-lg text-sm font-bold flex items-center justify-center gap-2">
+                                        {workflowStatus === 'running' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+                                        {workflowStatus === 'running' ? t('workflow_status_running') : t('workflow_status_waiting')}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Workflow Steps List */}
@@ -510,6 +556,16 @@ ${contextText}
                                                 <div className="mt-2 flex items-center gap-1.5 text-[9px] font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded-md border border-orange-100 max-w-fit">
                                                     <CheckCircle2 className="w-2.5 h-2.5" />
                                                     <span>审查: {getAgentById(step.validation.reviewerId).name}</span>
+                                                </div>
+                                            )}
+
+                                            {/* Error Message */}
+                                            {log?.status === 'failed' && log.error && (
+                                                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-600 whitespace-pre-wrap animate-fadeIn">
+                                                    <div className="font-bold flex items-center gap-1 mb-1">
+                                                        <X className="w-3 h-3" /> 执行失败
+                                                    </div>
+                                                    {log.error}
                                                 </div>
                                             )}
 
