@@ -90,10 +90,10 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     const { t } = useTranslation();
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'workflow' | 'agents' | 'artifacts'>('workflow');
+    const [activeTab, setActiveTab] = useState<'workflow' | 'artifacts'>('workflow');
 
     // View State
-    const [viewMode, setViewMode] = useState<'segment' | 'step' | 'artifact'>('segment');
+    const [viewMode, setViewMode] = useState<'segment' | 'step' | 'artifact' | 'agent'>('segment');
     const [activeStepId, setActiveStepId] = useState<string | null>(null);
     const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
 
@@ -102,6 +102,76 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
     // Notification State
     const [latestArtifact, setLatestArtifact] = useState<StoryArtifact | null>(null);
+
+    // Floating Window State - Initialize directly from localStorage to avoid flash
+    const [agentWindowPos, setAgentWindowPos] = useState(() => {
+        const savedPos = localStorage.getItem('story_agent_window_pos');
+        const width = 350;
+        const padding = 20;
+        const defaultX = Math.max(20, window.innerWidth - width - padding);
+        const defaultY = 80;
+
+        if (savedPos) {
+            try {
+                let { x, y } = JSON.parse(savedPos);
+                
+                // Only reset if window is completely off-screen (truly invisible)
+                const windowCompletelyOffRight = x > window.innerWidth;
+                const windowCompletelyOffLeft = x + width < 0;
+                const windowCompletelyOffBottom = y > window.innerHeight;
+                const windowCompletelyOffTop = y < -50;
+
+                if (windowCompletelyOffRight || windowCompletelyOffLeft || windowCompletelyOffBottom || windowCompletelyOffTop) {
+                    console.log('Window position reset: saved position was off-screen', { x, y });
+                    return { x: defaultX, y: defaultY };
+                } else {
+                    console.log('Loaded agent window position from storage:', { x, y });
+                    return { x, y };
+                }
+            } catch (e) {
+                console.error("Failed to parse saved window position", e);
+                return { x: defaultX, y: defaultY };
+            }
+        }
+        return { x: defaultX, y: defaultY };
+    });
+    
+    const [isDragging, setIsDragging] = useState(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const prevDragging = useRef(false); // Track previous dragging state
+
+    // Save position ONLY when dragging transitions from true to false
+    useEffect(() => {
+        if (prevDragging.current === true && isDragging === false) {
+            // Dragging just ended, save position
+            console.log('Drag ended, saving position:', agentWindowPos);
+            localStorage.setItem('story_agent_window_pos', JSON.stringify(agentWindowPos));
+        }
+        prevDragging.current = isDragging;
+    }, [isDragging, agentWindowPos]);
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (isDragging) {
+                setAgentWindowPos({
+                    x: e.clientX - dragOffset.current.x,
+                    y: e.clientY - dragOffset.current.y
+                });
+            }
+        };
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
 
     useEffect(() => {
         if (agents.length === 0) {
@@ -332,7 +402,6 @@ ${contextText}
             <div className="p-3 border-b border-slate-200 bg-white flex items-center justify-between">
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setActiveTab('workflow')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'workflow' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>{t('story_copilot_tab_workflow')}</button>
-                    <button onClick={() => setActiveTab('agents')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'agents' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>{t('story_copilot_tab_agents')}</button>
                     <button onClick={() => setActiveTab('artifacts')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'artifacts' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>{t('story_copilot_tab_artifacts')}</button>
                 </div>
                 <button onClick={() => setIsCopilotOpen(false)} className="text-slate-400 hover:text-slate-600"><Sidebar className="w-4 h-4" /></button>
@@ -524,35 +593,6 @@ ${contextText}
                     </>
                 )}
 
-                {activeTab === 'agents' && (
-                    <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50">
-                        <button
-                            onClick={() => {
-                                const newAgent: StoryAgent = { id: crypto.randomUUID(), name: '新 Agent', role: 'Role', systemPrompt: '', color: 'bg-slate-500', icon: 'Bot' };
-                                onUpdateAgents([...agents, newAgent]);
-                                setEditingAgent(newAgent);
-                            }}
-                            className="w-full py-2 mb-3 border border-dashed border-indigo-300 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50"
-                        >
-                            {t('action_new_agent')}
-                        </button>
-                        <div className="space-y-2">
-                            {agents.map(agent => (
-                                <div key={agent.id} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2 group hover:border-indigo-300 hover:shadow-sm transition-all">
-                                    <div className={`w-8 h-8 rounded flex items-center justify-center text-white ${agent.color}`}>
-                                        <Bot className="w-4 h-4" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-bold truncate">{agent.name}</div>
-                                        <div className="text-[10px] text-slate-500 truncate">{agent.role}</div>
-                                    </div>
-                                    <button onClick={() => setEditingAgent(agent)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-600"><Edit className="w-3 h-3" /></button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 {activeTab === 'artifacts' && (
                     <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50 space-y-3">
                         {artifacts.length === 0 ? (
@@ -585,140 +625,120 @@ ${contextText}
                 )}
             </div>
 
-            {/* Editor Modals for Steps/Agents */}
+            {/* Editor Modals for Steps (Agents moved to main view) */}
             {
-                (editingStep || editingAgent) && (
+                editingStep && (
                     <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 p-6 flex flex-col animate-fadeIn">
                         <div className="bg-white rounded-xl shadow-2xl border border-slate-200 flex flex-col max-h-full overflow-hidden w-full max-w-lg mx-auto">
                             <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
-                                <h3 className="font-bold text-sm text-slate-700">{editingStep ? t('modal_edit_step') : t('modal_edit_agent')}</h3>
-                                <button onClick={() => { setEditingStep(null); setEditingAgent(null); }} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                                <h3 className="font-bold text-sm text-slate-700">{t('modal_edit_step')}</h3>
+                                <button onClick={() => setEditingStep(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
                             </div>
                             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                                {editingStep && (
-                                    <>
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_step_name')}</label>
-                                            <input className="w-full border p-2 text-xs rounded" value={editingStep.name} onChange={e => setEditingStep({ ...editingStep, name: e.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_exec_agent')}</label>
-                                            <select className="w-full border p-2 text-xs rounded bg-white" value={editingStep.agentId} onChange={e => setEditingStep({ ...editingStep, agentId: e.target.value })}>
-                                                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_instruction')}</label>
-                                            <textarea className="w-full border p-2 text-xs rounded h-32" value={editingStep.instruction} onChange={e => setEditingStep({ ...editingStep, instruction: e.target.value })} />
-                                        </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_step_name')}</label>
+                                    <input className="w-full border p-2 text-xs rounded" value={editingStep.name} onChange={e => setEditingStep({ ...editingStep, name: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_exec_agent')}</label>
+                                    <select className="w-full border p-2 text-xs rounded bg-white" value={editingStep.agentId} onChange={e => setEditingStep({ ...editingStep, agentId: e.target.value })}>
+                                        {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_instruction')}</label>
+                                    <textarea className="w-full border p-2 text-xs rounded h-32" value={editingStep.instruction} onChange={e => setEditingStep({ ...editingStep, instruction: e.target.value })} />
+                                </div>
 
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_output_type')}</label>
-                                            <select
-                                                className="w-full border p-2 text-xs rounded bg-white"
-                                                value={editingStep.outputArtifactType || 'markdown'}
-                                                onChange={e => setEditingStep({ ...editingStep, outputArtifactType: e.target.value as any })}
-                                            >
-                                                <option value="markdown">{t('option_markdown')}</option>
-                                                <option value="text">{t('option_text')}</option>
-                                                <option value="code">{t('option_code')}</option>
-                                                <option value="json">{t('option_json')}</option>
-                                            </select>
-                                        </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('label_output_type')}</label>
+                                    <select
+                                        className="w-full border p-2 text-xs rounded bg-white"
+                                        value={editingStep.outputArtifactType || 'markdown'}
+                                        onChange={e => setEditingStep({ ...editingStep, outputArtifactType: e.target.value as any })}
+                                    >
+                                        <option value="markdown">{t('option_markdown')}</option>
+                                        <option value="text">{t('option_text')}</option>
+                                        <option value="code">{t('option_code')}</option>
+                                        <option value="json">{t('option_json')}</option>
+                                    </select>
+                                </div>
 
-                                        <div className="border border-slate-200 rounded p-3 bg-slate-50">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <input
-                                                    type="checkbox"
-                                                    id="enableValidation"
-                                                    checked={!!editingStep.validation}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            setEditingStep({
-                                                                ...editingStep,
-                                                                validation: {
-                                                                    reviewerId: agents[0]?.id || 'architect',
-                                                                    criteria: '请检查内容的逻辑性和一致性。',
-                                                                    maxRetries: 3
-                                                                }
-                                                            });
-                                                        } else {
-                                                            setEditingStep({ ...editingStep, validation: undefined });
+                                <div className="border border-slate-200 rounded p-3 bg-slate-50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <input
+                                            type="checkbox"
+                                            id="enableValidation"
+                                            checked={!!editingStep.validation}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setEditingStep({
+                                                        ...editingStep,
+                                                        validation: {
+                                                            reviewerId: agents[0]?.id || 'architect',
+                                                            criteria: '请检查内容的逻辑性和一致性。',
+                                                            maxRetries: 3
                                                         }
-                                                    }}
-                                                    className="rounded text-indigo-600 focus:ring-indigo-500"
-                                                />
-                                                <label htmlFor="enableValidation" className="text-xs font-bold text-slate-700 select-none cursor-pointer flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3" /> 启用审查迭代 (Reviewer Loop)
-                                                </label>
-                                            </div>
+                                                    });
+                                                } else {
+                                                    setEditingStep({ ...editingStep, validation: undefined });
+                                                }
+                                            }}
+                                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="enableValidation" className="text-xs font-bold text-slate-700 select-none cursor-pointer flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" /> 启用审查迭代 (Reviewer Loop)
+                                        </label>
+                                    </div>
 
-                                            {editingStep.validation && (
-                                                <div className="space-y-3 pl-1 mt-3 pt-3 border-t border-slate-200 animate-fadeIn">
-                                                    <div>
-                                                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Reviewer Agent</label>
-                                                        <select
-                                                            className="w-full border border-slate-300 p-2 text-xs rounded bg-white"
-                                                            value={editingStep.validation.reviewerId}
-                                                            onChange={e => setEditingStep({
-                                                                ...editingStep,
-                                                                validation: { ...editingStep.validation!, reviewerId: e.target.value }
-                                                            })}
-                                                        >
-                                                            {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">审查标准 (Criteria)</label>
-                                                        <textarea
-                                                            className="w-full border border-slate-300 p-2 text-xs rounded h-20 resize-none"
-                                                            value={editingStep.validation.criteria}
-                                                            onChange={e => setEditingStep({
-                                                                ...editingStep,
-                                                                validation: { ...editingStep.validation!, criteria: e.target.value }
-                                                            })}
-                                                            placeholder="例如：检查是否有逻辑漏洞..."
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">最大重试次数 (Max Retries)</label>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            max="10"
-                                                            className="w-full border border-slate-300 p-2 text-xs rounded"
-                                                            value={editingStep.validation.maxRetries}
-                                                            onChange={e => setEditingStep({
-                                                                ...editingStep,
-                                                                validation: { ...editingStep.validation!, maxRetries: parseInt(e.target.value) || 1 }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
+                                    {editingStep.validation && (
+                                        <div className="space-y-3 pl-1 mt-3 pt-3 border-t border-slate-200 animate-fadeIn">
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Reviewer Agent</label>
+                                                <select
+                                                    className="w-full border border-slate-300 p-2 text-xs rounded bg-white"
+                                                    value={editingStep.validation.reviewerId}
+                                                    onChange={e => setEditingStep({
+                                                        ...editingStep,
+                                                        validation: { ...editingStep.validation!, reviewerId: e.target.value }
+                                                    })}
+                                                >
+                                                    {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">审查标准 (Criteria)</label>
+                                                <textarea
+                                                    className="w-full border border-slate-300 p-2 text-xs rounded h-20 resize-none"
+                                                    value={editingStep.validation.criteria}
+                                                    onChange={e => setEditingStep({
+                                                        ...editingStep,
+                                                        validation: { ...editingStep.validation!, criteria: e.target.value }
+                                                    })}
+                                                    placeholder="例如：检查是否有逻辑漏洞..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">最大重试次数 (Max Retries)</label>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="10"
+                                                    className="w-full border border-slate-300 p-2 text-xs rounded"
+                                                    value={editingStep.validation.maxRetries}
+                                                    onChange={e => setEditingStep({
+                                                        ...editingStep,
+                                                        validation: { ...editingStep.validation!, maxRetries: parseInt(e.target.value) || 1 }
+                                                    })}
+                                                />
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={() => { onUpdateWorkflow(workflow.map(s => s.id === editingStep.id ? editingStep : s)); setEditingStep(null); }}
-                                            className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold"
-                                        >保存更改</button>
-                                    </>
-                                )}
-                                {editingAgent && (
-                                    <>
-                                        <input className="w-full border p-2 text-xs rounded" value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} placeholder="名称" />
-                                        <input className="w-full border p-2 text-xs rounded" value={editingAgent.role} onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })} placeholder="角色" />
-                                        <textarea className="w-full border p-2 text-xs rounded h-32" value={editingAgent.systemPrompt} onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })} placeholder="System Prompt..." />
-                                        <div className="flex gap-2 flex-wrap">
-                                            {['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500'].map(c => (
-                                                <button key={c} onClick={() => setEditingAgent({ ...editingAgent, color: c })} className={`w-5 h-5 rounded-full ${c} ${editingAgent.color === c ? 'ring-2 ring-offset-1' : ''}`} />
-                                            ))}
-                                        </div>
-                                        <button
-                                            onClick={() => { onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a)); setEditingAgent(null); }}
-                                            className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold mt-4"
-                                        >保存 Agent</button>
-                                    </>
-                                )}
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => { onUpdateWorkflow(workflow.map(s => s.id === editingStep.id ? editingStep : s)); setEditingStep(null); }}
+                                    className="w-full bg-indigo-600 text-white py-2 rounded text-xs font-bold"
+                                >保存更改</button>
                             </div>
                         </div>
                     </div>
@@ -727,6 +747,56 @@ ${contextText}
             }
         </div >
 
+    );
+
+    const renderFloatingAgentWindow = () => (
+        <div
+            style={{ left: agentWindowPos.x, top: agentWindowPos.y }}
+            className="absolute w-[350px] h-[600px] max-h-[80vh] bg-white border border-slate-200 shadow-2xl rounded-xl flex flex-col z-40 overflow-hidden"
+        >
+            <div
+                onMouseDown={(e) => {
+                    setIsDragging(true);
+                    dragOffset.current = {
+                        x: e.clientX - agentWindowPos.x,
+                        y: e.clientY - agentWindowPos.y
+                    };
+                }}
+                className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between cursor-move select-none"
+            >
+                <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-indigo-500" />
+                    {t('story_copilot_tab_agents')}
+                </h3>
+            </div>
+            <div className="flex flex-col h-full p-4 overflow-y-auto bg-slate-50">
+                <button
+                    onClick={() => {
+                        const newAgent: StoryAgent = { id: crypto.randomUUID(), name: '新 Agent', role: 'Role', systemPrompt: '', color: 'bg-slate-500', icon: 'Bot' };
+                        onUpdateAgents([...agents, newAgent]);
+                        setEditingAgent(newAgent);
+                        setViewMode('agent');
+                    }}
+                    className="w-full py-2 mb-3 border border-dashed border-indigo-300 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-50"
+                >
+                    {t('action_new_agent')}
+                </button>
+                <div className="space-y-2">
+                    {agents.map(agent => (
+                        <div key={agent.id} className="bg-white border border-slate-200 rounded-lg p-2 flex items-center gap-2 group hover:border-indigo-300 hover:shadow-sm transition-all">
+                            <div className={`w-8 h-8 rounded flex items-center justify-center text-white ${agent.color}`}>
+                                <Bot className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-xs font-bold truncate">{agent.name}</div>
+                                <div className="text-[10px] text-slate-500 truncate">{agent.role}</div>
+                            </div>
+                            <button onClick={() => { setEditingAgent(agent); setViewMode('agent'); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-indigo-600"><Edit className="w-3 h-3" /></button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
     );
 
     // Toast Notification Component
@@ -860,7 +930,62 @@ ${contextText}
                         )}
                     </div>
                 )}
+
+                {viewMode === 'agent' && editingAgent && (
+                    <div className="flex-1 flex flex-col h-full bg-white animate-fadeIn">
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                            <h3 className="font-bold text-lg text-slate-800">{t('modal_edit_agent')}</h3>
+                            <button onClick={() => { setEditingAgent(null); setViewMode('segment'); }} className="text-slate-400 hover:text-slate-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto max-w-3xl mx-auto w-full space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">名称</label>
+                                    <input className="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-indigo-200 focus:outline-none" value={editingAgent.name} onChange={e => setEditingAgent({ ...editingAgent, name: e.target.value })} placeholder="名称" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">角色</label>
+                                    <input className="w-full border p-2 text-sm rounded-lg focus:ring-2 focus:ring-indigo-200 focus:outline-none" value={editingAgent.role} onChange={e => setEditingAgent({ ...editingAgent, role: e.target.value })} placeholder="角色" />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">System Prompt</label>
+                                <textarea className="w-full border p-3 text-sm rounded-lg h-64 focus:ring-2 focus:ring-indigo-200 focus:outline-none font-mono" value={editingAgent.systemPrompt} onChange={e => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })} placeholder="System Prompt..." />
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">标识颜色</label>
+                                <div className="flex gap-3 flex-wrap">
+                                    {['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-teal-500', 'bg-indigo-500'].map(c => (
+                                        <button
+                                            key={c}
+                                            onClick={() => setEditingAgent({ ...editingAgent, color: c })}
+                                            className={`w-8 h-8 rounded-full ${c} transition-all ${editingAgent.color === c ? 'ring-4 ring-offset-2 ring-slate-200 scale-110' : 'hover:scale-110'}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100 flex justify-end">
+                                <button
+                                    onClick={() => {
+                                        onUpdateAgents(agents.map(a => a.id === editingAgent.id ? editingAgent : a));
+                                        setEditingAgent(null);
+                                        setViewMode('segment');
+                                    }}
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                                >
+                                    保存 Agent 配置
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
+            {renderFloatingAgentWindow()}
         </div>
     );
 };
