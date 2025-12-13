@@ -1,9 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SaveModal, LoadModal } from '../../components/WorldModals';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../../i18n';
 import { WorldData } from '../../types';
+
+// Mock i18next
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({
+        t: (key: string) => key,
+        i18n: {
+            language: 'en',
+            changeLanguage: vi.fn(),
+        },
+    }),
+}));
 
 describe('SaveModal', () => {
    const defaultProps = {
@@ -17,9 +26,7 @@ describe('SaveModal', () => {
 
    const renderSaveModal = (props = {}) => {
       return render(
-         <I18nextProvider i18n={i18n}>
-            <SaveModal {...defaultProps} {...props} />
-         </I18nextProvider>
+         <SaveModal {...defaultProps} {...props} />
       );
    };
 
@@ -135,9 +142,7 @@ describe('LoadModal', () => {
 
    const renderLoadModal = (props = {}) => {
       return render(
-         <I18nextProvider i18n={i18n}>
-            <LoadModal {...defaultProps} {...props} />
-         </I18nextProvider>
+         <LoadModal {...defaultProps} {...props} />
       );
    };
 
@@ -184,7 +189,8 @@ describe('LoadModal', () => {
       const deleteButtons = screen.getAllByTitle(/action_delete_save/i);
       fireEvent.click(deleteButtons[0]);
       
-      expect(onDeleteWorld).toHaveBeenCalledWith('1');
+      // Should call with '2' because World 2 is newer and sorted first
+      expect(onDeleteWorld).toHaveBeenCalledWith('2');
    });
 
    it('should call onClose when close button is clicked', () => {

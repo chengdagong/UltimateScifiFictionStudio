@@ -11,29 +11,34 @@ vi.mock('../services/geminiService', () => ({
     generateWorldChronicle: vi.fn()
 }));
 
-const mockApiSettings = {
-    provider: 'google' as const,
-    apiKey: 'test-key',
-    baseUrl: '',
-    model: 'gemini-pro'
-};
+// Mock useApiSettings
+vi.mock('../hooks/useApiSettings', () => ({
+    useApiSettings: () => ({
+        apiSettings: {
+            provider: 'google',
+            apiKey: 'test-key',
+            baseUrl: '',
+            model: 'gemini-pro'
+        },
+        checkApiKey: () => true
+    })
+}));
 
-const mockCheckApiKey = () => true;
+// Mock useTaskStore
+const mockAddTask = vi.fn().mockReturnValue('task-123');
+const mockUpdateTask = vi.fn();
+
+vi.mock('../stores/taskStore', () => ({
+    useTaskStore: () => ({
+        addTask: mockAddTask,
+        updateTask: mockUpdateTask
+    })
+}));
 
 describe('useWorldModel Task Integration', () => {
     it('should create a task when generating a layer', async () => {
-        // 1. Mock Task Manager
-        const mockTaskManager = {
-            addTask: vi.fn().mockReturnValue('task-123'),
-            updateTask: vi.fn(),
-            completeTask: vi.fn(),
-            failTask: vi.fn()
-        };
-
         // 2. Init Hook
-        const { result } = renderHook(() =>
-            useWorldModel(mockApiSettings, mockCheckApiKey, mockTaskManager)
-        );
+        const { result } = renderHook(() => useWorldModel());
 
         // 3. Trigger Action
         const layerId = result.current.currentFramework.layers[0].id;
@@ -43,24 +48,22 @@ describe('useWorldModel Task Integration', () => {
 
         // 4. Assertions
         // Verify addTask was called
-        expect(mockTaskManager.addTask).toHaveBeenCalledWith(
-            'generation',
-            expect.stringContaining('生成层级'),
-            expect.any(String),
-            undefined,
-            expect.objectContaining({ layerId })
-        );
+        expect(mockAddTask).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'generation',
+            name: expect.stringContaining('生成层级'),
+            metadata: expect.objectContaining({ layerId })
+        }));
 
         // Verify task status update (running)
-        expect(mockTaskManager.updateTask).toHaveBeenCalledWith(
+        expect(mockUpdateTask).toHaveBeenCalledWith(
             'task-123',
             expect.objectContaining({ status: 'running' })
         );
 
         // Verify task completion
-        expect(mockTaskManager.completeTask).toHaveBeenCalledWith(
+        expect(mockUpdateTask).toHaveBeenCalledWith(
             'task-123',
-            expect.any(Object)
+            expect.objectContaining({ status: 'completed' })
         );
     });
 });

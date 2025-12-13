@@ -29,17 +29,22 @@ import { Toast, ToastType } from '../components/Toast';
 // Hooks
 import { useApiSettings } from '../hooks/useApiSettings';
 import { useWorldModel } from '../hooks/useWorldModel';
-import { useStoryEngine } from '../hooks/useStoryEngine';
 import { usePersistence } from '../hooks/usePersistence';
-import { useAiTaskManager } from '../hooks/useAiTaskManager';
+import { useTaskStore } from '../stores/taskStore';
+import { useAppStore } from '../stores/appStore';
 
 export const MainLayout: React.FC = () => {
    // App UI State
-   const [activeTab, setActiveTab] = useState<'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks' | 'git'>(() => {
-      // Restore last active tab from localStorage, default to 'participants'
-      return (localStorage.getItem('active_tab') as any) || 'participants';
-   });
-   const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
+   const { activeTab, setActiveTab, currentWorldId } = useAppStore();
+   
+   // Initialize activeTab from localStorage
+   useEffect(() => {
+      const savedTab = localStorage.getItem('active_tab');
+      if (savedTab) {
+         setActiveTab(savedTab);
+      }
+   }, []);
+
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -71,18 +76,38 @@ export const MainLayout: React.FC = () => {
 
    const isMinimalUI = apiSettings.minimalUI;
 
-   const taskManager = useAiTaskManager(currentWorldId);
-   const worldModel = useWorldModel(apiSettings, checkApiKey, taskManager);
-   const storyEngine = useStoryEngine();
-   const persistence = usePersistence({
-      worldModel,
-      storyEngine,
-      apiSettings,
-      checkApiKey,
-      setActiveTab,
-      currentWorldId,
-      setCurrentWorldId
-   });
+   const taskStore = useTaskStore();
+   const worldModel = useWorldModel();
+
+   // Persistence logic for tasks
+   useEffect(() => {
+      if (!currentWorldId) {
+         taskStore.setTasks([]);
+         return;
+      }
+      try {
+         const saved = localStorage.getItem(`ecoNarrative_tasks_${currentWorldId}`);
+         if (saved) {
+            taskStore.setTasks(JSON.parse(saved));
+         } else {
+            taskStore.setTasks([]);
+         }
+      } catch (e) {
+         console.error("Failed to load tasks", e);
+         taskStore.setTasks([]);
+      }
+   }, [currentWorldId]);
+
+   useEffect(() => {
+      if (!currentWorldId) return;
+      try {
+         localStorage.setItem(`ecoNarrative_tasks_${currentWorldId}`, JSON.stringify(taskStore.tasks));
+      } catch (e) {
+         console.error("Failed to save tasks", e);
+      }
+   }, [taskStore.tasks, currentWorldId]);
+
+   const persistence = usePersistence();
 
    // Auto-close welcome modal when a world is loaded
    useEffect(() => {
@@ -100,7 +125,7 @@ export const MainLayout: React.FC = () => {
       entities.forEach(entity => {
          worldModel.handleAddEntity(entity.name, entity.description, entity.category);
       });
-      taskManager.removeTask(taskId);
+      taskStore.removeTask(taskId);
       showToast(`已写入 ${entities.length} 个实体`, 'success');
    };
 
@@ -146,45 +171,84 @@ export const MainLayout: React.FC = () => {
       let taskId = '';
 
       if (action === 'analyze') {
-         taskId = taskManager.addTask('analysis', '文本社会解剖', '正在从选中文本中提取社会实体...', undefined, { text });
+         taskId = taskStore.addTask({
+            type: 'analysis',
+            name: '文本社会解剖',
+            description: '正在从选中文本中提取社会实体...',
+            metadata: { text }
+         });
          showToast("正在后台分析文本... 请稍候", 'info');
 
          try {
-            taskManager.updateTask(taskId, { status: 'running', progress: 10 });
+            taskStore.updateTask(taskId, { status: 'running', progress: 10 });
             const results = await extractEntitiesFromSnippet(text, worldModel.model.entities, apiSettings);
 
             if (results.length > 0) {
-               taskManager.completeTask(taskId, { summary: `提取了 ${results.length} 个新实体`, data: results });
+               taskStore.updateTask(taskId, {
+                  status: 'completed',
+                  progress: 100,
+                  result: { summary: `提取了 ${results.length} 个新实体`, data: results },
+                  updatedAt: Date.now()
+               });
                showToast(`分析完成！已生成 ${results.length} 个新实体`, 'success');
             } else {
-               taskManager.completeTask(taskId, { summary: "未提取到有效实体" });
+               taskStore.updateTask(taskId, {
+                  status: 'completed',
+                  progress: 100,
+                  result: { summary: "未提取到有效实体" },
+                  updatedAt: Date.now()
+               });
                showToast("分析完成，但未能从文本中提取到有效实体。", 'info');
             }
          } catch (e: any) {
             console.error("Analysis failed", e);
-            taskManager.failTask(taskId, e.message);
+            taskStore.updateTask(taskId, {
+               status: 'failed',
+               result: { error: e.message },
+               updatedAt: Date.now()
+            });
             showToast("分析失败: " + e.message, 'error');
          }
       }
       else if (action === 'explain') {
-         taskId = taskManager.addTask('custom', '文本智能解释', '正在解释选中的文本...', undefined, { text });
-         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+         taskId = taskStore.addTask({
+            type: 'custom',
+            name: '文本智能解释',
+            description: '正在解释选中的文本...',
+            metadata: { text }
+         });
+         taskStore.updateTask(taskId, { status: 'running', progress: 0 });
 
          setTimeout(() => {
-            taskManager.completeTask(taskId, {
-               summary: "解释完成 (Demo)",
-               error: "AI 解释功能即将上线... (目前仅演示 UI)"
+            taskStore.updateTask(taskId, {
+               status: 'completed',
+               progress: 100,
+               result: {
+                  summary: "解释完成 (Demo)",
+                  error: "AI 解释功能即将上线... (目前仅演示 UI)"
+               },
+               updatedAt: Date.now()
             });
          }, 1500);
       }
       else if (action === 'expand') {
-         taskId = taskManager.addTask('custom', '文本智能扩写', '正在基于选中文本进行扩写...', undefined, { text });
-         taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+         taskId = taskStore.addTask({
+            type: 'custom',
+            name: '文本智能扩写',
+            description: '正在基于选中文本进行扩写...',
+            metadata: { text }
+         });
+         taskStore.updateTask(taskId, { status: 'running', progress: 0 });
 
          setTimeout(() => {
-            taskManager.completeTask(taskId, {
-               summary: "扩写完成 (Demo)",
-               error: "AI 扩写功能即将上线... (目前仅演示 UI)"
+            taskStore.updateTask(taskId, {
+               status: 'completed',
+               progress: 100,
+               result: {
+                  summary: "扩写完成 (Demo)",
+                  error: "AI 扩写功能即将上线... (目前仅演示 UI)"
+               },
+               updatedAt: Date.now()
             });
          }, 1500);
       }
@@ -237,12 +301,8 @@ export const MainLayout: React.FC = () => {
                   persistence.handleLoadWorldList();
                   persistence.setShowLoadModal(true);
                }}
-               onSync={worldModel.handleGlobalSync}
-               isSyncing={worldModel.isSyncing}
                onSettings={() => setShowSettingsModal(true)}
                onToggleLanguage={toggleLanguage}
-               runningTasksCount={taskManager.tasks.filter(t => t.status === 'running').length}
-               completedTasksCount={taskManager.tasks.filter(t => t.status === 'completed').length}
             />
 
             {/* Main Content */}
@@ -250,12 +310,8 @@ export const MainLayout: React.FC = () => {
                {/* Header */}
                <Header
                   worldName={persistence.worldName}
-                  entitiesCount={worldModel.model?.entities?.length ?? 0}
-                  chaptersCount={worldModel.storySegments?.length ?? 0}
                   isAutoSaving={persistence.isAutoSaving}
                   lastAutoSaveTime={persistence.lastAutoSaveTime}
-                  isSyncing={worldModel.isSyncing}
-                  onSync={worldModel.handleGlobalSync}
                   user={user}
                   onLogout={logout}
                />
@@ -264,116 +320,39 @@ export const MainLayout: React.FC = () => {
                <div className="flex-1 overflow-hidden p-4 md:p-6 bg-slate-50/50">
                   {activeTab === 'tasks' && (
                      <TaskListView
-                        tasks={taskManager.tasks}
-                        onClearCompleted={taskManager.clearCompleted}
-                        onRemoveTask={taskManager.removeTask}
                         onAddEntities={handleAddEntitiesFromTask}
-                        onUpdateTask={taskManager.updateTask}
                      />
                   )}
 
                   {activeTab === 'participants' && (
                      <ParticipantsView
-                        model={worldModel.model}
-                        framework={worldModel.currentFramework}
-                        onAddEntity={worldModel.handleAddEntity}
-                        onUpdateEntity={worldModel.handleUpdateEntity}
-                        onRemoveEntity={worldModel.handleRemoveEntity}
-                        onGenerateLayer={worldModel.handleGenerateLayer}
-                        onAddRelationship={worldModel.handleAddRelationship}
-                        onRemoveRelationship={worldModel.handleRemoveRelationship}
-                        onAddEntityState={worldModel.handleAddEntityState}
-                        onUpdateEntityState={worldModel.handleUpdateEntityState}
-                        onRemoveEntityState={worldModel.handleRemoveEntityState}
-                        loadingLayerId={worldModel.loadingLayer}
                         isMinimalUI={isMinimalUI}
                      />
                   )}
 
                   {activeTab === 'timeline' && (
-                     <TimelineView
-                        model={worldModel.model}
-                        storySegments={worldModel.storySegments}
-                        framework={worldModel.currentFramework}
-                     />
+                     <TimelineView />
                   )}
 
                   {activeTab === 'tech' && (
-                     <TechTreeView
-                        technologies={worldModel.model.technologies || []}
-                        dependencies={worldModel.model.techDependencies || []}
-                        onAddNode={worldModel.handleAddTechNode}
-                        onUpdateNode={worldModel.handleUpdateTechNode}
-                        onRemoveNode={worldModel.handleRemoveTechNode}
-                        onAddDependency={worldModel.handleAddTechDependency}
-                        onRemoveDependency={worldModel.handleRemoveTechDependency}
-                        onGenerateRelatedNode={worldModel.handleGenerateRelatedTech}
-                        onManualCreateAndLink={worldModel.handleAddTechNodeWithLink}
-                        onUpdateNodeLayout={worldModel.handleUpdateTechNodeLayout}
-                        generatingNodeId={worldModel.generatingTechId}
-                     />
+                     <TechTreeView />
                   )}
 
                   {activeTab === 'chronicle' && (
-                     <ChronicleView
-                        model={worldModel.model}
-                        storySegments={worldModel.storySegments}
-                        context={worldModel.worldContext}
-                        chronicleText={worldModel.chronicleText}
-                        setChronicleText={worldModel.setChronicleText}
-                        isSyncing={worldModel.isSyncing}
-                     />
+                     <ChronicleView />
                   )}
 
                   {activeTab === 'characters' && (
-                     <CharacterCardView
-                        entities={worldModel.model.entities}
-                        settings={apiSettings}
-                        onAddEntity={worldModel.handleAddEntity}
-                        onUpdateEntity={worldModel.handleUpdateEntity}
-                        onRemoveEntity={worldModel.handleRemoveEntity}
-                     />
+                     <CharacterCardView />
                   )}
 
                   {activeTab === 'story' && (
-                     <StoryAgentView
-                        agents={storyEngine.agents}
-                        workflow={storyEngine.workflow}
-                        model={worldModel.model}
-                        framework={worldModel.currentFramework}
-                        worldContext={worldModel.worldContext}
-                        storySegments={worldModel.storySegments}
-                        settings={apiSettings}
-                        currentTimeSetting={worldModel.currentTimeSetting}
-                        onUpdateAgents={storyEngine.setAgents}
-                        onUpdateWorkflow={storyEngine.setWorkflow}
-                        onAddStorySegment={worldModel.handleAddStorySegment}
-                        onUpdateStorySegment={worldModel.handleUpdateStorySegment}
-                        onRemoveStorySegment={worldModel.handleRemoveStorySegment}
-                        onAnalysisRequest={(text, action) => handleRequestAnalysis(text, action)}
-                        storyGuidance={storyEngine.storyGuidance}
-                        onUpdateStoryGuidance={storyEngine.setStoryGuidance}
-                        workflowStatus={storyEngine.workflowStatus}
-                        onUpdateWorkflowStatus={storyEngine.setWorkflowStatus}
-                        currentStepIndex={storyEngine.currentStepIndex}
-                        onUpdateCurrentStepIndex={storyEngine.setCurrentStepIndex}
-                        executionLogs={storyEngine.executionLogs}
-                        onUpdateExecutionLogs={storyEngine.setExecutionLogs}
-                        stepOutputs={storyEngine.stepOutputs}
-                        onUpdateStepOutputs={storyEngine.setStepOutputs}
-                        generatedDraft={storyEngine.generatedDraft}
-                        onUpdateGeneratedDraft={storyEngine.setGeneratedDraft}
-                        artifacts={storyEngine.artifacts}
-                        onUpdateArtifacts={storyEngine.setArtifacts}
-                        taskManager={taskManager}
-                     />
+                     <StoryAgentView />
                   )}
 
                   {activeTab === 'brainstorm' && (
                      <BrainstormView
-                        globalApiSettings={apiSettings}
                         onAnalysisRequest={handleRequestAnalysis}
-                        taskManager={taskManager}
                         worldId={currentWorldId}
                      />
                   )}

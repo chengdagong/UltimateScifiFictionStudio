@@ -3,21 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Scroll, BookText, Loader2 } from 'lucide-react';
 import { WorldModel, StorySegment } from '../types';
 import MilkdownEditor from './MilkdownEditor';
+import { useWorldModel } from '../hooks/useWorldModel';
 
-interface ChronicleViewProps {
-  model: WorldModel;
-  storySegments: StorySegment[];
-  context: string;
-  chronicleText: string;
-  setChronicleText: (text: string) => void;
-  isSyncing: boolean;
-}
-
-const ChronicleView: React.FC<ChronicleViewProps> = ({
-  chronicleText,
-  setChronicleText,
-  isSyncing
-}) => {
+const ChronicleView: React.FC = () => {
+  const { chronicleText, setChronicleText, isSyncing } = useWorldModel();
   const { t } = useTranslation();
   // Key to force remount when text changes externally (e.g. sync or load)
   const [editorKey, setEditorKey] = useState(0);

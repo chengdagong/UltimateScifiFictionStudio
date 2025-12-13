@@ -1,27 +1,66 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Header } from '../../components/Header';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../../i18n';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useWorldModel } from '../../hooks/useWorldModel';
+
+// Mock i18next
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({
+        t: (key: string) => key,
+        i18n: {
+            language: 'en',
+            changeLanguage: vi.fn(),
+        },
+    }),
+}));
+
+// Mock hooks
+vi.mock('../../hooks/useWorldModel', () => ({
+    useWorldModel: vi.fn()
+}));
+
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            retry: false,
+        },
+    },
+});
 
 describe('Header', () => {
+    const mockOnSync = vi.fn();
+    
+    beforeEach(() => {
+        vi.clearAllMocks();
+        
+        // Default mock implementations
+        (useWorldModel as any).mockReturnValue({
+            model: { entities: Array(10).fill({}) }, // Mock 10 entities
+            storySegments: Array(5).fill({}), // Mock 5 chapters
+            isSyncing: false,
+            handleGlobalSync: mockOnSync
+        });
+    });
+
    const defaultProps = {
       worldName: 'Test World',
-      entitiesCount: 10,
-      chaptersCount: 5,
       isAutoSaving: false,
       lastAutoSaveTime: Date.now(),
-      isSyncing: false,
-      onSync: vi.fn(),
       user: 'testuser',
-      onLogout: vi.fn()
+      onLogout: vi.fn(),
+      // Extra props passed in test but ignored by component
+      entitiesCount: 10,
+      chaptersCount: 5,
+      isSyncing: false,
+      onSync: vi.fn()
    };
 
    const renderHeader = (props = {}) => {
       return render(
-         <I18nextProvider i18n={i18n}>
+         <QueryClientProvider client={queryClient}>
             <Header {...defaultProps} {...props} />
-         </I18nextProvider>
+         </QueryClientProvider>
       );
    };
 
@@ -32,11 +71,13 @@ describe('Header', () => {
 
    it('should render entities count', () => {
       renderHeader();
+      // Expect 10 because we mocked model.entities to have length 10
       expect(screen.getByText(/10.*label_entities/i)).toBeInTheDocument();
    });
 
    it('should render chapters count', () => {
       renderHeader();
+      // Expect 5 because we mocked storySegments to have length 5
       expect(screen.getByText(/5.*label_chapters/i)).toBeInTheDocument();
    });
 
@@ -57,17 +98,23 @@ describe('Header', () => {
    });
 
    it('should call onSync when sync button is clicked', () => {
-      const onSync = vi.fn();
-      renderHeader({ onSync });
+      renderHeader();
       
       const syncButton = screen.getByRole('button', { name: /action_refresh_status/i });
       fireEvent.click(syncButton);
       
-      expect(onSync).toHaveBeenCalledTimes(1);
+      expect(mockOnSync).toHaveBeenCalledTimes(1);
    });
 
    it('should disable sync button when syncing', () => {
-      renderHeader({ isSyncing: true });
+      (useWorldModel as any).mockReturnValue({
+          model: { entities: [] },
+          storySegments: [],
+          isSyncing: true,
+          handleGlobalSync: mockOnSync
+      });
+
+      renderHeader();
       
       const syncButton = screen.getByRole('button', { name: /action_refresh_status/i });
       expect(syncButton).toBeDisabled();
@@ -86,11 +133,13 @@ describe('Header', () => {
    it('should show user menu when user avatar is clicked', () => {
       renderHeader({ user: 'testuser' });
       
-      const userButton = screen.getByRole('button');
-      fireEvent.click(userButton);
+      // Find user button by text content since there are multiple buttons
+      const userButton = screen.getByText('testuser').closest('button');
+      fireEvent.click(userButton!);
       
       expect(screen.getByText('已登录')).toBeInTheDocument();
-      expect(screen.getByText('testuser')).toBeInTheDocument();
+      // Check that we have multiple 'testuser' texts now (one in button, one in menu)
+      expect(screen.getAllByText('testuser').length).toBeGreaterThan(1);
    });
 
    it('should call onLogout when logout button is clicked', () => {
@@ -98,8 +147,8 @@ describe('Header', () => {
       renderHeader({ user: 'testuser', onLogout });
       
       // Open user menu
-      const userButton = screen.getAllByRole('button')[1]; // Second button is user button
-      fireEvent.click(userButton);
+      const userButton = screen.getByText('testuser').closest('button');
+      fireEvent.click(userButton!);
       
       // Click logout
       const logoutButton = screen.getByRole('button', { name: /logout/i });
@@ -109,7 +158,14 @@ describe('Header', () => {
    });
 
    it('should show spinner icon when syncing', () => {
-      const { container } = renderHeader({ isSyncing: true });
+      (useWorldModel as any).mockReturnValue({
+          model: { entities: [] },
+          storySegments: [],
+          isSyncing: true,
+          handleGlobalSync: mockOnSync
+      });
+
+      const { container } = renderHeader();
       
       // Check for spinner animation class
       const spinner = container.querySelector('.animate-spin');

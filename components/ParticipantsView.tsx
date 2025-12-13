@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SocialEntity, EntityCategory, LayerDefinition, FrameworkDefinition, EntityRelationship, EntityState } from '../types';
+import { useWorldModel } from '../hooks/useWorldModel';
 import {
   Search, Plus, Sparkles, Trash2, Save,
   User, Building2, Cpu, Coins, Scale, MapPin, Calendar, HelpCircle,
@@ -12,18 +13,6 @@ import {
 import GraphView from './GraphView';
 
 interface ParticipantsViewProps {
-  model: { entities: SocialEntity[], relationships: EntityRelationship[], entityStates: EntityState[] };
-  framework: FrameworkDefinition;
-  onAddEntity: (name: string, desc: string, category: EntityCategory) => string;
-  onUpdateEntity: (id: string, name: string, desc: string, category: EntityCategory, validFrom?: string, validTo?: string) => void;
-  onRemoveEntity: (id: string) => void;
-  onGenerateLayer: (layerId: string) => void;
-  onAddRelationship: (sourceId: string, targetId: string, type: string, description: string, timestamp?: string, validFrom?: string, validTo?: string) => void;
-  onRemoveRelationship: (id: string) => void;
-  onAddEntityState: (entityId: string, timestamp: string, description: string) => void;
-  onUpdateEntityState: (stateId: string, description: string) => void;
-  onRemoveEntityState: (stateId: string) => void;
-  loadingLayerId: string | null;
   isMinimalUI?: boolean;
 }
 
@@ -63,20 +52,23 @@ const isActiveInTime = (time: string | null, start?: string, end?: string): bool
 };
 
 const ParticipantsView: React.FC<ParticipantsViewProps> = ({
-  model,
-  framework,
-  onAddEntity,
-  onUpdateEntity,
-  onRemoveEntity,
-  onGenerateLayer,
-  onAddRelationship,
-  onRemoveRelationship,
-  onAddEntityState,
-  onUpdateEntityState,
-  onRemoveEntityState,
-  loadingLayerId,
   isMinimalUI = false
 }) => {
+  const {
+    model,
+    currentFramework: framework,
+    handleAddEntity: onAddEntity,
+    handleUpdateEntity: onUpdateEntity,
+    handleRemoveEntity: onRemoveEntity,
+    handleAddEntityState: onAddEntityState,
+    handleUpdateEntityState: onUpdateEntityState,
+    handleRemoveEntityState: onRemoveEntityState,
+    handleAddRelationship: onAddRelationship,
+    handleRemoveRelationship: onRemoveRelationship,
+    handleGenerateLayer: onGenerateLayer,
+    loadingLayer: loadingLayerId
+  } = useWorldModel();
+
   const { t } = useTranslation();
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");

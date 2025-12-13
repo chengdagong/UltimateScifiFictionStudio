@@ -1,8 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { NewWorldModal } from '../../components/NewWorldModal';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../../i18n';
+
+// Mock i18next
+vi.mock('react-i18next', () => ({
+    useTranslation: () => ({
+        t: (key: string) => key,
+        i18n: {
+            language: 'en',
+            changeLanguage: vi.fn(),
+        },
+    }),
+}));
 
 describe('NewWorldModal', () => {
    const defaultProps = {
@@ -15,9 +24,7 @@ describe('NewWorldModal', () => {
 
    const renderModal = (props = {}) => {
       return render(
-         <I18nextProvider i18n={i18n}>
-            <NewWorldModal {...defaultProps} {...props} />
-         </I18nextProvider>
+         <NewWorldModal {...defaultProps} {...props} />
       );
    };
 
@@ -99,7 +106,8 @@ describe('NewWorldModal', () => {
          fireEvent.click(createButton);
          
          await waitFor(() => {
-            expect(screen.getByText(/创建失败，请重试/i)).toBeInTheDocument();
+            // Error message is hardcoded in component or comes from error object
+            expect(screen.getByText(/Create failed/i)).toBeInTheDocument();
          });
       });
    });
@@ -165,8 +173,8 @@ describe('NewWorldModal', () => {
          const nameInput = screen.getByPlaceholderText(/输入世界名称.../i);
          fireEvent.change(nameInput, { target: { value: 'Imported World' } });
          
-         const textarea = screen.getByPlaceholder(/placeholder_import_text/i);
-         fire.change(textarea, { target: { value: 'Import text' } });
+         const textarea = screen.getByPlaceholderText(/placeholder_import_text/i);
+         fireEvent.change(textarea, { target: { value: 'Import text' } });
          
          const importButton = screen.getByText(/action_start_analysis/i);
          fireEvent.click(importButton);
@@ -197,7 +205,7 @@ describe('NewWorldModal', () => {
       const closeButton = screen.getByRole('button', { name: '' }); // X button
       fireEvent.click(closeButton);
       
-      expect(onClose).toHaveBeenCalled Times(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
    });
 
    it('should clear error when world name changes', async () => {
@@ -211,12 +219,12 @@ describe('NewWorldModal', () => {
       fireEvent.click(createButton);
       
       await waitFor(() => {
-         expect(screen.getByText(/创建失败，请重试/i)).toBeInTheDocument();
+         expect(screen.getByText(/Test error/i)).toBeInTheDocument();
       });
       
       // Change name should clear error
       fireEvent.change(input, { target: { value: 'Test2' } });
       
-      expect(screen.queryByText(/创建失败，请重试/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Test error/i)).not.toBeInTheDocument();
    });
 });

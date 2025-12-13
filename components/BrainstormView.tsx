@@ -9,12 +9,12 @@ import remarkGfm from 'remark-gfm';
 import { BrainstormSession, BrainstormMessage, BrainstormConfig, ApiSettings } from '../types';
 import { sendChatMessage } from '../services/chatService';
 import { useWorldAdminMenu } from '../hooks/useWorldAdminMenu';
+import { useApiSettings } from '../hooks/useApiSettings';
+import { useTaskStore } from '../stores/taskStore';
 
 interface BrainstormViewProps {
-    globalApiSettings: ApiSettings;
     onSaveSession?: (session: BrainstormSession) => void;
     onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
-    taskManager?: any;
     worldId?: string;
 }
 
@@ -28,13 +28,14 @@ const DEFAULT_CONFIG: BrainstormConfig = {
 };
 
 const BrainstormView: React.FC<BrainstormViewProps> = ({
-    globalApiSettings,
     onSaveSession,
     onAnalysisRequest,
-    taskManager,
     worldId
 }) => {
     const { t } = useTranslation();
+    const { apiSettings: globalApiSettings } = useApiSettings();
+    const taskStore = useTaskStore();
+
     // State
     const [sessions, setSessions] = useState<BrainstormSession[]>([]);
 
@@ -156,9 +157,14 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
 
         // 0. Register Task
         let taskId = "";
-        if (taskManager) {
-            taskId = taskManager.addTask('custom', t('brainstorm_task_name'), t('brainstorm_task_desc'), activeSession.id);
-            taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+        if (taskStore) {
+            taskId = taskStore.addTask({
+                type: 'custom',
+                name: t('brainstorm_task_name'),
+                description: t('brainstorm_task_desc'),
+                sourceId: activeSession.id
+            });
+            taskStore.updateTask(taskId, { status: 'running', progress: 0 });
         }
 
         // 1. Add User Message
@@ -200,15 +206,24 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
                 lastModified: Date.now()
             } : s));
 
-            if (taskId && taskManager) {
-                taskManager.completeTask(taskId, { summary: t('brainstorm_task_complete') });
+            if (taskId && taskStore) {
+                taskStore.updateTask(taskId, {
+                    status: 'completed',
+                    progress: 100,
+                    result: { summary: t('brainstorm_task_complete') },
+                    updatedAt: Date.now()
+                });
             }
 
         } catch (error: any) {
             console.error(error);
             alert(`${t('brainstorm_send_fail')}: ` + error.message);
-            if (taskId && taskManager) {
-                taskManager.failTask(taskId, error.message || 'Error');
+            if (taskId && taskStore) {
+                taskStore.updateTask(taskId, {
+                    status: 'failed',
+                    result: { error: error.message || 'Error' },
+                    updatedAt: Date.now()
+                });
             }
             setInput(currentInput);
         } finally {

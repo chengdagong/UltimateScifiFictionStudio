@@ -5,6 +5,8 @@ import {
    Globe2, Activity, BookText, Menu, X, Network, Cpu, PanelLeftClose,
    PanelLeftOpen, User, MessageCircle, Inbox, GitBranch
 } from 'lucide-react';
+import { useWorldModel } from '../hooks/useWorldModel';
+import { useTaskStore } from '../stores/taskStore';
 
 interface SidebarProps {
    activeTab: string;
@@ -16,12 +18,8 @@ interface SidebarProps {
    onNewWorld: () => void;
    onSaveWorld: () => void;
    onLoadWorld: () => void;
-   onSync: () => void;
-   isSyncing: boolean;
    onSettings: () => void;
    onToggleLanguage: () => void;
-   runningTasksCount: number;
-   completedTasksCount: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,14 +32,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
    onNewWorld,
    onSaveWorld,
    onLoadWorld,
-   onSync,
-   isSyncing,
    onSettings,
-   onToggleLanguage,
-   runningTasksCount,
-   completedTasksCount
+   onToggleLanguage
 }) => {
    const { t, i18n } = useTranslation();
+   const { handleGlobalSync: onSync, isSyncing } = useWorldModel();
+   const tasks = useTaskStore(state => state.tasks);
+   const runningTasksCount = tasks.filter(t => t.status === 'running').length;
+   const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
 
    const handleTabClick = (tab: 'participants' | 'timeline' | 'story' | 'chronicle' | 'tech' | 'characters' | 'brainstorm' | 'tasks' | 'git') => {
       setActiveTab(tab);

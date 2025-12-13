@@ -1,18 +1,17 @@
 import React from 'react';
-import { AiTask, AiTaskStatus } from '../types/taskTypes';
+import { AiTaskStatus } from '../types/taskTypes';
 import { SocialEntity } from '../types';
 import { ListTodo, Loader2, CheckCircle2, AlertCircle, Clock, Trash2, ArrowRight, Play } from 'lucide-react';
 import TaskResultViewer from './TaskResultViewer';
+import { useTaskStore } from '../stores/taskStore';
 
 interface TaskListViewProps {
-    tasks: AiTask[];
-    onClearCompleted: () => void;
-    onRemoveTask: (id: string) => void;
     onAddEntities: (taskId: string, entities: SocialEntity[]) => void;
-    onUpdateTask: (id: string, updates: Partial<AiTask>) => void;
 }
 
-const TaskListView: React.FC<TaskListViewProps> = ({ tasks, onClearCompleted, onRemoveTask, onAddEntities, onUpdateTask }) => {
+const TaskListView: React.FC<TaskListViewProps> = ({ onAddEntities }) => {
+    const { tasks, removeTask: onRemoveTask, clearCompletedTasks: onClearCompleted, updateTask: onUpdateTask } = useTaskStore();
+
     // Debug logging
     // console.log("TaskListView Rendered. Total Tasks:", tasks.length);
 

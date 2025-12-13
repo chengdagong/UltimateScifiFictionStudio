@@ -6,32 +6,21 @@ import { saveProject, createProject, getProjects, getProject, deleteProject, com
 import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 import { importWorldFromText, generateWorldFromScenario } from '../services/geminiService';
-import { UseWorldModelReturn } from './useWorldModel';
-import { UseStoryEngineReturn } from './useStoryEngine';
+import { useWorldModel } from './useWorldModel';
+import { useStoryEngine } from './useStoryEngine';
+import { useApiSettings } from './useApiSettings';
+import { useAppStore } from '../stores/appStore';
 import { FRAMEWORKS, INITIAL_CONTEXTS } from '../constants/frameworks';
 import { WorldPreset } from '../constants/presets';
 
-interface UsePersistenceProps {
-    worldModel: UseWorldModelReturn;
-    storyEngine: UseStoryEngineReturn;
-    apiSettings: ApiSettings;
-    checkApiKey: () => boolean;
-    setActiveTab: (tab: any) => void;
-    currentWorldId: string | undefined;
-    setCurrentWorldId: (id: string | undefined) => void;
-}
-
-export const usePersistence = ({
-    worldModel,
-    storyEngine,
-    apiSettings,
-    checkApiKey,
-    setActiveTab,
-    currentWorldId,
-    setCurrentWorldId
-}: UsePersistenceProps) => {
+export const usePersistence = () => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    
+    const worldModel = useWorldModel();
+    const storyEngine = useStoryEngine();
+    const { apiSettings, checkApiKey } = useApiSettings();
+    const { currentWorldId, setCurrentWorldId, setActiveTab } = useAppStore();
 
     // Persistence State
     const [worldName, setWorldName] = useState("");

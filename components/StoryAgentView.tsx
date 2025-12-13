@@ -9,84 +9,139 @@ import {
     ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react';
 import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog, StoryArtifact } from '../types';
-import { executeAgentTask, executeReviewTask } from '../services/geminiService';
+import { executeAgentTask, executeReviewTask, extractEntitiesFromSnippet } from '../services/geminiService';
 import MilkdownEditor from './MilkdownEditor';
 import { Book, FileText, Code2, Database } from 'lucide-react';
-
-interface StoryAgentViewProps {
-    agents: StoryAgent[];
-    workflow: WorkflowStep[];
-    model: WorldModel;
-    framework: FrameworkDefinition;
-    worldContext: string;
-    storySegments: StorySegment[];
-    settings: ApiSettings;
-    currentTimeSetting: string;
-    onUpdateAgents: (agents: StoryAgent[]) => void;
-    onUpdateWorkflow: (workflow: WorkflowStep[]) => void;
-    onAddStorySegment: (content: string) => void;
-    onUpdateStorySegment: (id: string, content: string, timestamp?: string) => void;
-    onRemoveStorySegment: (id: string) => void;
-
-    // Lifted State
-    storyGuidance: string;
-    onUpdateStoryGuidance: (val: string) => void;
-    workflowStatus: 'idle' | 'running' | 'paused' | 'completed';
-    onUpdateWorkflowStatus: (val: 'idle' | 'running' | 'paused' | 'completed') => void;
-    currentStepIndex: number;
-    onUpdateCurrentStepIndex: (val: number) => void;
-    executionLogs: Record<string, StepExecutionLog>;
-    onUpdateExecutionLogs: (val: Record<string, StepExecutionLog> | ((prev: Record<string, StepExecutionLog>) => Record<string, StepExecutionLog>)) => void;
-    stepOutputs: Record<string, string>;
-    onUpdateStepOutputs: (val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
-    generatedDraft: string;
-    onUpdateGeneratedDraft: (val: string) => void;
-    // Artifacts State
-    artifacts: StoryArtifact[];
-    onUpdateArtifacts: (val: StoryArtifact[]) => void;
-    onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
-    taskManager?: any; // Use weak type for now or import ReturnType. Ideally import Hook return type.
-}
+import { useWorldModel } from '../hooks/useWorldModel';
+import { useStoryEngine } from '../hooks/useStoryEngine';
+import { useApiSettings } from '../hooks/useApiSettings';
+import { useTaskStore } from '../stores/taskStore';
+import { AiTaskType, AiTaskResult } from '../types/taskTypes';
 
 // REMOVED: DEFAULT_AGENTS moved inside component for i18n
 
-const StoryAgentView: React.FC<StoryAgentViewProps> = ({
-    agents: agentsProp,
-    workflow: workflowProp,
-    model,
-    framework,
-    worldContext,
-    storySegments: storySegmentsProp,
-    settings,
-    currentTimeSetting,
-    onUpdateAgents,
-    onUpdateWorkflow,
-    onAddStorySegment,
-    onUpdateStorySegment,
-    onRemoveStorySegment,
-    // De-structure new props
-    storyGuidance,
-    onUpdateStoryGuidance,
-    workflowStatus,
-    onUpdateWorkflowStatus,
-    currentStepIndex,
-    onUpdateCurrentStepIndex,
-    executionLogs,
-    onUpdateExecutionLogs,
-    stepOutputs,
-    onUpdateStepOutputs,
-    generatedDraft,
-    onUpdateGeneratedDraft,
-    artifacts: artifactsProp,
-    onUpdateArtifacts,
-    onAnalysisRequest,
-    taskManager
-}) => {
-    // 防御性处理：确保数组prop始终有默认值
-    const agents = agentsProp || [];
-    const workflow = workflowProp || [];
-    const storySegments = storySegmentsProp || [];
-    const artifacts = artifactsProp || [];
+const StoryAgentView: React.FC = () => {
+    const {
+        model,
+        currentFramework: framework,
+        worldContext,
+        storySegments,
+        currentTimeSetting,
+        handleAddStorySegment: onAddStorySegment,
+        handleUpdateStorySegment: onUpdateStorySegment,
+        handleRemoveStorySegment: onRemoveStorySegment,
+        handleAddEntity
+    } = useWorldModel();
+
+    const {
+        agents,
+        setAgents: onUpdateAgents,
+        workflow,
+        setWorkflow: onUpdateWorkflow,
+        storyGuidance,
+        setStoryGuidance: onUpdateStoryGuidance,
+        workflowStatus,
+        setWorkflowStatus: onUpdateWorkflowStatus,
+        currentStepIndex,
+        setCurrentStepIndex: onUpdateCurrentStepIndex,
+        executionLogs,
+        setExecutionLogs: onUpdateExecutionLogs,
+        stepOutputs,
+        setStepOutputs: onUpdateStepOutputs,
+        generatedDraft,
+        setGeneratedDraft: onUpdateGeneratedDraft,
+        artifacts,
+        setArtifacts: onUpdateArtifacts
+    } = useStoryEngine();
+
+    const { apiSettings: settings } = useApiSettings();
+    const taskStore = useTaskStore();
+
+    const onAnalysisRequest = async (text: string, action: 'analyze' | 'explain' | 'expand' = 'analyze') => {
+        console.log("StoryAgentView: onAnalysisRequest called", text, action);
+
+        let taskId = '';
+
+        if (action === 'analyze') {
+            taskId = taskStore.addTask({
+                type: 'analysis',
+                name: '文本社会解剖',
+                description: '正在从选中文本中提取社会实体...',
+                metadata: { text }
+            });
+            
+            try {
+                taskStore.updateTask(taskId, { status: 'running', progress: 10 });
+                const results = await extractEntitiesFromSnippet(text, model.entities, settings);
+
+                if (results.length > 0) {
+                    taskStore.updateTask(taskId, {
+                        status: 'completed',
+                        progress: 100,
+                        result: { summary: `提取了 ${results.length} 个新实体`, data: results },
+                        updatedAt: Date.now()
+                    });
+                } else {
+                    taskStore.updateTask(taskId, {
+                        status: 'completed',
+                        progress: 100,
+                        result: { summary: "未提取到有效实体" },
+                        updatedAt: Date.now()
+                    });
+                }
+            } catch (e: any) {
+                console.error("Analysis failed", e);
+                taskStore.updateTask(taskId, {
+                    status: 'failed',
+                    result: { error: e.message },
+                    updatedAt: Date.now()
+                });
+            }
+        }
+        else if (action === 'explain') {
+            taskId = taskStore.addTask({
+                type: 'custom',
+                name: '文本智能解释',
+                description: '正在解释选中的文本...',
+                metadata: { text }
+            });
+            taskStore.updateTask(taskId, { status: 'running', progress: 0 });
+
+            setTimeout(() => {
+                taskStore.updateTask(taskId, {
+                    status: 'completed',
+                    progress: 100,
+                    result: {
+                        summary: "解释完成 (Demo)",
+                        error: "AI 解释功能即将上线... (目前仅演示 UI)"
+                    },
+                    updatedAt: Date.now()
+                });
+            }, 1500);
+        }
+        else if (action === 'expand') {
+            taskId = taskStore.addTask({
+                type: 'custom',
+                name: '文本智能扩写',
+                description: '正在基于选中文本进行扩写...',
+                metadata: { text }
+            });
+            taskStore.updateTask(taskId, { status: 'running', progress: 0 });
+
+            setTimeout(() => {
+                taskStore.updateTask(taskId, {
+                    status: 'completed',
+                    progress: 100,
+                    result: {
+                        summary: "扩写完成 (Demo)",
+                        error: "AI 扩写功能即将上线... (目前仅演示 UI)"
+                    },
+                    updatedAt: Date.now()
+                });
+            }, 1500);
+        }
+    };
+
     const { t } = useTranslation();
     const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
     const [isCopilotOpen, setIsCopilotOpen] = useState(true);
@@ -170,9 +225,14 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
         }));
 
         let taskId = "";
-        if (taskManager) {
-            taskId = taskManager.addTask('story_step', `执行步骤: ${step.name}`, step.instruction, undefined, { stepId: step.id });
-            taskManager.updateTask(taskId, { status: 'running', progress: 0 });
+        if (taskStore) {
+            taskId = taskStore.addTask({
+                type: 'story_step',
+                name: `执行步骤: ${step.name}`,
+                description: step.instruction,
+                metadata: { stepId: step.id }
+            });
+            taskStore.updateTask(taskId, { status: 'running', progress: 0 });
         }
 
         try {
@@ -250,8 +310,13 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
 
             onUpdateArtifacts([...artifacts, newArtifact]);
 
-            if (taskId && taskManager) {
-                taskManager.completeTask(taskId, { summary: '步骤执行完成', data: content });
+            if (taskId && taskStore) {
+                taskStore.updateTask(taskId, {
+                    status: 'completed',
+                    progress: 100,
+                    result: { summary: '步骤执行完成', data: content },
+                    updatedAt: Date.now()
+                });
             }
 
             // Trigger Notification
@@ -269,8 +334,12 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
             }));
 
-            if (taskId && taskManager) {
-                taskManager.failTask(taskId, e.message);
+            if (taskId && taskStore) {
+                taskStore.updateTask(taskId, {
+                    status: 'failed',
+                    result: { error: e.message },
+                    updatedAt: Date.now()
+                });
             }
 
             onUpdateWorkflowStatus('paused'); // Allow retry?

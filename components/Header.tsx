@@ -1,32 +1,29 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, Loader2, User as UserIcon, LogOut } from 'lucide-react';
+import { useWorldModel } from '../hooks/useWorldModel';
 
 interface HeaderProps {
    worldName: string;
-   entitiesCount: number;
-   chaptersCount: number;
    isAutoSaving: boolean;
    lastAutoSaveTime: number;
-   isSyncing: boolean;
-   onSync: () => void;
    user: string | null;
    onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
    worldName,
-   entitiesCount,
-   chaptersCount,
    isAutoSaving,
    lastAutoSaveTime,
-   isSyncing,
-   onSync,
    user,
    onLogout
 }) => {
    const { t } = useTranslation();
    const [showUserMenu, setShowUserMenu] = useState(false);
+   const { model, storySegments, isSyncing, handleGlobalSync: onSync } = useWorldModel();
+   
+   const entitiesCount = model.entities.length;
+   const chaptersCount = storySegments.length;
 
    return (
       <header className="hidden md:flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shrink-0 shadow-sm z-20">

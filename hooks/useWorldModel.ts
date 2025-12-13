@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import { WorldModel, StorySegment, SocialEntity, EntityCategory, EntityRelationship, EntityState, TechNode, TechDependency, FrameworkDefinition, ApiSettings } from '../types';
 import { FRAMEWORKS } from '../constants/frameworks';
 import { useWorldStore } from '../stores/worldStore';
+import { useApiSettings } from './useApiSettings';
+import { useTaskStore } from '../stores/taskStore';
+import { AiTaskType, AiTaskResult } from '../types/taskTypes';
 
 export interface UseWorldModelReturn {
     model: WorldModel;
@@ -64,9 +67,11 @@ export interface UseWorldModelReturn {
  * 兼容层：包装 Zustand worldStore，保持原有 API 接口
  * 这样现有组件无需修改即可使用新的 Zustand 状态管理
  */
-export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boolean, taskManager?: any): UseWorldModelReturn => {
+export const useWorldModel = (): UseWorldModelReturn => {
     // 从 Zustand store 获取状态和 actions
     const store = useWorldStore();
+    const { apiSettings, checkApiKey } = useApiSettings();
+    const taskStore = useTaskStore();
     
     // Derived Framework (使用 useMemo 优化)
     const currentFramework = useMemo(() =>
@@ -74,13 +79,44 @@ export const useWorldModel = (apiSettings: ApiSettings, checkApiKey: () => boole
         [store.currentFrameworkId]
     );
 
+    // Adapter for taskManager expected by worldStore
+    const taskManagerAdapter = useMemo(() => ({
+        addTask: (type: string, name: string, description: string, sourceId?: string, metadata?: any) => {
+            return taskStore.addTask({
+                type: type as AiTaskType,
+                name,
+                description,
+                sourceId,
+                metadata
+            });
+        },
+        updateTask: (id: string, updates: any) => {
+            taskStore.updateTask(id, updates);
+        },
+        completeTask: (id: string, result: AiTaskResult) => {
+            taskStore.updateTask(id, {
+                status: 'completed',
+                progress: 100,
+                result,
+                updatedAt: Date.now()
+            });
+        },
+        failTask: (id: string, error: string) => {
+            taskStore.updateTask(id, {
+                status: 'failed',
+                result: { error },
+                updatedAt: Date.now()
+            });
+        }
+    }), [taskStore]);
+
     // 包装 actions 以注入依赖（apiSettings, checkApiKey, taskManager）
     const handleGenerateLayer = async (layerId: string) => {
-        await store.generateLayer(layerId, apiSettings, checkApiKey, taskManager);
+        await store.generateLayer(layerId, apiSettings, checkApiKey, taskManagerAdapter);
     };
 
     const handleGenerateRelatedTech = async (baseNodeId: string, relation: 'dependency' | 'unlock') => {
-        await store.generateRelatedTech(baseNodeId, relation, apiSettings, checkApiKey, taskManager);
+        await store.generateRelatedTech(baseNodeId, relation, apiSettings, checkApiKey, taskManagerAdapter);
     };
 
     const handleGlobalSync = async (): Promise<boolean> => {

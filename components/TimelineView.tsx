@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import * as d3Import from 'd3';
 import { WorldModel, StorySegment, FrameworkDefinition, SocialEntity, EntityCategory } from '../types';
 import { Info, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { useWorldModel } from '../hooks/useWorldModel';
 
 // Robustly handle D3 import
 const d3 = (d3Import as any).default || d3Import;
@@ -25,12 +26,6 @@ interface SimulationLinkDatum<NodeDatum extends SimulationNodeDatum> {
     index?: number;
 }
 
-interface TimelineViewProps {
-    model: WorldModel;
-    storySegments: StorySegment[];
-    framework: FrameworkDefinition;
-}
-
 interface GraphNode extends SimulationNodeDatum {
     id: string;
     type: 'EVENT' | 'ENTITY';
@@ -49,7 +44,8 @@ interface GraphLink extends SimulationLinkDatum<GraphNode> {
     type: 'CHRONOLOGY' | 'PARTICIPATION' | 'CONTINUITY';
 }
 
-const TimelineView: React.FC<TimelineViewProps> = ({ model, storySegments, framework }) => {
+const TimelineView: React.FC = () => {
+    const { model, storySegments, currentFramework: framework } = useWorldModel();
     const { t } = useTranslation();
     const svgRef = useRef<SVGSVGElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);

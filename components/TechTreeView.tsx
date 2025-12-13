@@ -2,36 +2,35 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as d3Import from 'd3';
+import { useWorldModel } from '../hooks/useWorldModel';
 import { TechNode, TechDependency } from '../types';
 import { Cpu, Plus, Trash2, X, Edit, Link, Sparkles, PenTool } from 'lucide-react';
 
 const d3 = (d3Import as any).default || d3Import;
 const ERA_WIDTH = 250;
 
-interface TechTreeViewProps {
-   technologies: TechNode[];
-   dependencies: TechDependency[];
-   onAddNode: (name: string, desc: string, era: string, type: 'military' | 'civil' | 'abstract') => void;
-   onUpdateNode: (id: string, name: string, desc: string, era: string, type: 'military' | 'civil' | 'abstract', status: 'concept' | 'prototype' | 'production' | 'obsolete') => void;
-   onRemoveNode: (id: string) => void;
-   onAddDependency: (sourceId: string, targetId: string) => void;
-   onRemoveDependency: (id: string) => void;
-   onGenerateRelatedNode?: (baseNodeId: string, relation: 'dependency' | 'unlock') => void;
-   onManualCreateAndLink?: (name: string, desc: string, era: string, type: 'military' | 'civil' | 'abstract', linkedNodeId: string, direction: 'dependency' | 'unlock') => void;
-   onUpdateNodeLayout?: (id: string, x: number, y: number) => void;
-   generatingNodeId?: string | null;
-}
-
 interface LinkChoiceContext {
    nodeId: string;
    direction: 'dependency' | 'unlock';
 }
 
-const TechTreeView: React.FC<TechTreeViewProps> = ({
-   technologies, dependencies,
-   onAddNode, onUpdateNode, onRemoveNode, onAddDependency, onRemoveDependency,
-   onGenerateRelatedNode, onManualCreateAndLink, onUpdateNodeLayout, generatingNodeId
-}) => {
+const TechTreeView: React.FC = () => {
+   const {
+      model,
+      handleAddTechNode: onAddNode,
+      handleUpdateTechNode: onUpdateNode,
+      handleRemoveTechNode: onRemoveNode,
+      handleAddTechDependency: onAddDependency,
+      handleRemoveTechDependency: onRemoveDependency,
+      handleGenerateRelatedTech: onGenerateRelatedNode,
+      handleAddTechNodeWithLink: onManualCreateAndLink,
+      handleUpdateTechNodeLayout: onUpdateNodeLayout,
+      generatingTechId: generatingNodeId
+   } = useWorldModel();
+
+   const technologies = model.technologies || [];
+   const dependencies = model.techDependencies || [];
+
    const { t } = useTranslation();
    const svgRef = useRef<SVGSVGElement>(null);
    const containerRef = useRef<HTMLDivElement>(null);

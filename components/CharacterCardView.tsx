@@ -2,27 +2,24 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, Plus, Trash2, Edit2, Sparkles, Loader2, Save, X, Calendar, FileText } from 'lucide-react'; // Using User icon for Person
-import { SocialEntity, EntityCategory, ApiSettings } from '../types';
+import { SocialEntity, EntityCategory } from '../types';
 import { generateCharacterProfile } from '../services/geminiService';
+import { useWorldModel } from '../hooks/useWorldModel';
+import { useApiSettings } from '../hooks/useApiSettings';
 
-interface CharacterCardViewProps {
-    entities: SocialEntity[];
-    settings: ApiSettings;
-    onAddEntity: (name: string, desc: string, category: EntityCategory) => string;
-    onUpdateEntity: (id: string, name: string, desc: string, category: EntityCategory, validFrom?: string, validTo?: string) => void;
-    onRemoveEntity: (id: string) => void;
-}
-
-const CharacterCardView: React.FC<CharacterCardViewProps> = ({
-    entities,
-    settings,
-    onAddEntity,
-    onUpdateEntity,
-    onRemoveEntity
-}) => {
+const CharacterCardView: React.FC = () => {
     const { t } = useTranslation();
+    const {
+        model,
+        handleAddEntity: onAddEntity,
+        handleUpdateEntity: onUpdateEntity,
+        handleRemoveEntity: onRemoveEntity
+    } = useWorldModel();
+    const { apiSettings: settings } = useApiSettings();
+
     // Filter only PEOPLE
-    const characters = entities.filter(e => e.category === EntityCategory.PERSON);
+    const characters = model.entities.filter(e => e.category === EntityCategory.PERSON);
+    const entities = model.entities;
 
     const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
     const [isEditing, setIsEditing] = useState(false);
