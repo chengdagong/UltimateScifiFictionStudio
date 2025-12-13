@@ -185,6 +185,10 @@ export interface BrainstormSession {
   lastModified: number;
 }
 
+export type WorkflowStatus = 'idle' | 'running' | 'paused' | 'completed';
+
+export type ExecutionLog = string;
+
 export interface StepExecutionLog {
   status: 'pending' | 'generating' | 'reviewing' | 'revising' | 'completed' | 'failed';
   content: string;

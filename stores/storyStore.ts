@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { StoryAgent, WorkflowStep, StepExecutionLog, StoryArtifact } from '../types';
+import { StoryAgent, WorkflowStep, StepExecutionLog, StoryArtifact, WorkflowStatus, ExecutionLog } from '../types';
 
 interface StoryState {
   // Core Data
@@ -10,7 +10,7 @@ interface StoryState {
   
   // Workflow Execution State
   storyGuidance: string;
-  workflowStatus: 'idle' | 'running' | 'paused' | 'completed';
+  workflowStatus: WorkflowStatus;
   currentStepIndex: number;
   executionLogs: Record<string, StepExecutionLog>;
   stepOutputs: Record<string, string>;
@@ -21,7 +21,7 @@ interface StoryState {
   setWorkflow: (workflow: WorkflowStep[]) => void;
   setArtifacts: (artifacts: StoryArtifact[]) => void;
   setStoryGuidance: (guidance: string) => void;
-  setWorkflowStatus: (status: 'idle' | 'running' | 'paused' | 'completed') => void;
+  setWorkflowStatus: (status: WorkflowStatus) => void;
   setCurrentStepIndex: (index: number) => void;
   setExecutionLogs: (logs: Record<string, StepExecutionLog>) => void;
   setStepOutputs: (outputs: Record<string, string>) => void;
@@ -29,7 +29,7 @@ interface StoryState {
 
   // Granular Actions
   updateStepStatus: (stepId: string, status: StepExecutionLog['status']) => void;
-  addLogEntry: (stepId: string, log: string) => void;
+  addLogEntry: (stepId: string, entry: ExecutionLog) => void;
   updateStepOutput: (stepId: string, output: string) => void;
   addArtifact: (artifact: StoryArtifact) => void;
   resetExecutionState: () => void;
@@ -79,7 +79,7 @@ export const useStoryStore = create<StoryState>()(
         };
       }),
 
-      addLogEntry: (stepId, log) => set((state) => {
+      addLogEntry: (stepId, entry) => set((state) => {
         const currentLog = state.executionLogs[stepId] || {
           status: 'pending',
           content: '',
@@ -91,7 +91,7 @@ export const useStoryStore = create<StoryState>()(
             ...state.executionLogs,
             [stepId]: {
               ...currentLog,
-              logs: [...(currentLog.logs || []), log]
+              logs: [...(currentLog.logs || []), entry]
             }
           }
         };

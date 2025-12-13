@@ -9,14 +9,13 @@ import {
     ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react';
 import { StoryAgent, WorkflowStep, WorldModel, FrameworkDefinition, ApiSettings, StorySegment, StepExecutionLog, StoryArtifact } from '../types';
-import { executeAgentTask, executeReviewTask, extractEntitiesFromSnippet } from '../services/geminiService';
+import { extractEntitiesFromSnippet } from '../services/geminiService';
 import MilkdownEditor from './MilkdownEditor';
 import { Book, FileText, Code2, Database } from 'lucide-react';
 import { useWorldModel } from '../hooks/useWorldModel';
 import { useStoryEngine } from '../hooks/useStoryEngine';
 import { useApiSettings } from '../hooks/useApiSettings';
 import { useTaskStore } from '../stores/taskStore';
-import { AiTaskType, AiTaskResult } from '../types/taskTypes';
 
 // REMOVED: DEFAULT_AGENTS moved inside component for i18n
 
@@ -51,7 +50,10 @@ const StoryAgentView: React.FC = () => {
         generatedDraft,
         setGeneratedDraft: onUpdateGeneratedDraft,
         artifacts,
-        setArtifacts: onUpdateArtifacts
+        setArtifacts: onUpdateArtifacts,
+        startWorkflow,
+        continueWorkflow,
+        applyResult
     } = useStoryEngine();
 
     const { apiSettings: settings } = useApiSettings();
@@ -155,8 +157,6 @@ const StoryAgentView: React.FC = () => {
     // Derived UI State
     const [editingAgent, setEditingAgent] = useState<StoryAgent | null>(null);
     const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null);
-    // Notification State
-    const [latestArtifact, setLatestArtifact] = useState<StoryArtifact | null>(null);
 
     useEffect(() => {
         if (agents.length === 0) {
@@ -200,199 +200,7 @@ const StoryAgentView: React.FC = () => {
     const selectedSegment = storySegments.find(s => s.id === selectedSegmentId);
 
     // --- Execution Logic ---
-
-    const executeStep = async (index: number, inputContext: string) => {
-        if (index >= workflow.length) {
-            onUpdateWorkflowStatus('completed');
-            return;
-        }
-
-        const step = workflow[index];
-        const agent = getAgentById(step.agentId);
-        onUpdateCurrentStepIndex(index);
-        onUpdateWorkflowStatus('running');
-
-        onUpdateCurrentStepIndex(index);
-        onUpdateWorkflowStatus('running');
-
-        // REMOVED: Auto-switch to Detail View
-        // setViewMode('step');
-        // setActiveStepId(step.id);
-
-        onUpdateExecutionLogs(prev => ({ // Updated
-            ...prev,
-            [step.id]: { status: 'generating', content: '', attempts: [] }
-        }));
-
-        let taskId = "";
-        if (taskStore) {
-            taskId = taskStore.addTask({
-                type: 'story_step',
-                name: `执行步骤: ${step.name}`,
-                description: step.instruction,
-                metadata: { stepId: step.id }
-            });
-            taskStore.updateTask(taskId, { status: 'running', progress: 0 });
-        }
-
-        try {
-            let currentRound = 1;
-            let isApproved = false;
-            let content = "";
-            let critique = "";
-            const maxRetries = step.validation ? (step.validation.maxRetries || 1) : 0;
-
-            // Iteration Loop (Internal to the step)
-            while (!isApproved && currentRound <= maxRetries + 1) {
-                const status = currentRound > 1 ? 'revising' : 'generating';
-                onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status } })); // Updated
-
-                // 1. Generate
-                content = await executeAgentTask(
-                    agent,
-                    step.instruction,
-                    inputContext, // Input is the result of previous step (or guidance)
-                    model,
-                    framework,
-                    worldContext,
-                    currentTimeSetting,
-                    settings,
-                    critique
-                );
-
-                // Update Log
-                onUpdateExecutionLogs(prev => { // Updated
-                    const logs = prev[step.id]!;
-                    const newAttempts = [...logs.attempts];
-                    if (newAttempts[currentRound - 1]) newAttempts[currentRound - 1].output = content;
-                    else newAttempts.push({ round: currentRound, output: content });
-                    return { ...prev, [step.id]: { ...logs, content, attempts: newAttempts } };
-                });
-
-                // 2. Validate (if needed)
-                if (step.validation) {
-                    onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'reviewing' } })); // Updated
-                    const reviewer = getAgentById(step.validation.reviewerId);
-                    const reviewResult = await executeReviewTask(reviewer, content, step.validation.criteria, model, framework, worldContext, settings);
-
-                    onUpdateExecutionLogs(prev => { // Updated
-                        const logs = prev[step.id]!;
-                        const newAttempts = [...logs.attempts];
-                        newAttempts[currentRound - 1].critique = reviewResult.feedback;
-                        newAttempts[currentRound - 1].verdict = reviewResult.verdict;
-                        return { ...prev, [step.id]: { ...logs, attempts: newAttempts } };
-                    });
-
-                    if (reviewResult.verdict === 'PASS') isApproved = true;
-                    else {
-                        critique = reviewResult.feedback;
-                        currentRound++;
-                    }
-                } else {
-                    isApproved = true;
-                }
-            }
-
-            onUpdateExecutionLogs(prev => ({ ...prev, [step.id]: { ...prev[step.id]!, status: 'completed' } })); // Updated
-
-            // Initial save of the output to editable state
-            onUpdateStepOutputs(prev => ({ ...prev, [step.id]: content })); // Updated
-
-            // Artifact Generation
-            const newArtifact: StoryArtifact = {
-                id: crypto.randomUUID(),
-                title: `${step.name} Output`,
-                type: step.outputArtifactType || 'markdown',
-                content: content,
-                sourceStepId: step.id,
-                createdAt: Date.now()
-            };
-
-            onUpdateArtifacts([...artifacts, newArtifact]);
-
-            if (taskId && taskStore) {
-                taskStore.updateTask(taskId, {
-                    status: 'completed',
-                    progress: 100,
-                    result: { summary: '步骤执行完成', data: content },
-                    updatedAt: Date.now()
-                });
-            }
-
-            // Trigger Notification
-            setLatestArtifact(newArtifact);
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => setLatestArtifact(null), 5000);
-
-            // PAUSE here for user intervention
-            onUpdateWorkflowStatus('paused'); // Updated
-
-        } catch (e: any) {
-            console.error(e);
-            onUpdateExecutionLogs(prev => ({ // Updated
-                ...prev,
-                [step.id]: { ...prev[step.id]!, status: 'failed', error: e.message }
-            }));
-
-            if (taskId && taskStore) {
-                taskStore.updateTask(taskId, {
-                    status: 'failed',
-                    result: { error: e.message },
-                    updatedAt: Date.now()
-                });
-            }
-
-            onUpdateWorkflowStatus('paused'); // Allow retry?
-            alert(`Step Failed: ${e.message}`);
-        }
-    };
-
-    const handleStartWorkflow = () => {
-        if (!settings.apiKey) return alert("Please configure API Key first"); // Keep basic alert or i18n? 'brainstorm_api_key_override' implies awareness. Let's start with basic.
-        if (!storyGuidance.trim()) return alert("Please enter story directive");
-
-        // Reset
-        onUpdateExecutionLogs({}); // Updated
-        onUpdateStepOutputs({}); // Updated
-        onUpdateCurrentStepIndex(-1); // Updated
-
-        // Prepare initial context
-        let contextSegments = storySegments;
-        if (selectedSegment) {
-            const idx = storySegments.findIndex(s => s.id === selectedSegmentId);
-            contextSegments = storySegments.slice(0, idx);
-        }
-        const contextText = contextSegments.length > 0
-            ? `【前情提要】:\n${contextSegments[contextSegments.length - 1].content.slice(-2000)}`
-            : "这是故事的开篇。";
-
-        const initialInput = `
-${contextText}
-
-【本章核心指令 (User Directive)】:
-"${storyGuidance}"
-`;
-        // Start Step 0
-        executeStep(0, initialInput);
-    };
-
-    const handleContinue = (fromIndex: number) => {
-        const currentStep = workflow[fromIndex];
-        // The input for the next step is the (potentially edited) output of the current step
-        const outputOfCurrentStep = stepOutputs[currentStep.id] || "";
-
-        executeStep(fromIndex + 1, outputOfCurrentStep);
-    };
-
-    const handleApplyResult = (content: string) => {
-        if (selectedSegment) {
-            onUpdateStorySegment(selectedSegment.id, selectedSegment.content + "\n\n" + content);
-        } else {
-            onAddStorySegment(content);
-        }
-        onUpdateGeneratedDraft(""); // Updated
-        onUpdateWorkflowStatus('idle'); // Updated
-    };
+    // Logic moved to useStoryEngine hook
 
     // --- Render Helpers ---
 
@@ -426,7 +234,7 @@ ${contextText}
                             </div>
                             {workflowStatus === 'idle' || workflowStatus === 'completed' ? (
                                 <button
-                                    onClick={handleStartWorkflow}
+                                    onClick={() => startWorkflow(selectedSegmentId)}
                                     className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2"
                                 >
                                     <Play className="w-4 h-4" /> {t('action_start_workflow')}
@@ -554,7 +362,7 @@ ${contextText}
                                                     {isCurrent && workflowStatus === 'paused' && (
                                                         <div className="mt-2 flex gap-2">
                                                             <button
-                                                                onClick={() => handleContinue(idx)}
+                                                                onClick={() => continueWorkflow(idx)}
                                                                 className="flex-1 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 flex items-center justify-center gap-1"
                                                             >
                                                                 <ArrowRight className="w-3 h-3" />
@@ -562,7 +370,7 @@ ${contextText}
                                                             </button>
                                                             {idx === workflow.length - 1 && (
                                                                 <button
-                                                                    onClick={() => handleApplyResult(output || "")}
+                                                                    onClick={() => applyResult(output || "", selectedSegmentId)}
                                                                     className="px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded text-xs font-bold hover:bg-emerald-100"
                                                                 >
                                                                     {t('action_apply_to_story')}
@@ -798,42 +606,6 @@ ${contextText}
 
     );
 
-    // Toast Notification Component
-    const renderNotification = () => {
-        if (!latestArtifact) return null;
-        return (
-            <div className="absolute bottom-6 right-6 z-50 animate-slideUp">
-                <div className="bg-slate-900/90 text-white p-4 rounded-xl shadow-2xl backdrop-blur-sm border border-slate-700 flex items-center gap-4 max-w-sm">
-                    <div className="bg-indigo-500/20 p-2 rounded-lg">
-                        <Sparkles className="w-5 h-5 text-indigo-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-sm">Artifact Generated</h4>
-                        <p className="text-xs text-slate-300 truncate">{latestArtifact.title}</p>
-                    </div>
-                    <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
-                        <button
-                            onClick={() => {
-                                setViewMode('artifact');
-                                setActiveArtifactId(latestArtifact.id);
-                                setLatestArtifact(null);
-                            }}
-                            className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
-                        >
-                            Open
-                        </button>
-                        <button
-                            onClick={() => setLatestArtifact(null)}
-                            className="text-slate-500 hover:text-white transition-colors"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="flex h-full w-full bg-white overflow-hidden relative">
             {renderCopilot()}
@@ -893,7 +665,7 @@ ${contextText}
                                         <div className="p-4 border-t border-slate-200 bg-white flex justify-end gap-3">
                                             {log?.status === 'completed' && workflowStatus === 'paused' && currentStepIndex === workflow.findIndex(s => s.id === step.id) && (
                                                 <button
-                                                    onClick={() => handleContinue(currentStepIndex)}
+                                                    onClick={() => continueWorkflow(currentStepIndex)}
                                                     className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-xl transition-all flex items-center gap-2"
                                                 >
                                                     <ArrowRight className="w-4 h-4" /> 确认并继续 (Confirm & Continue)
