@@ -122,10 +122,8 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
                 const windowCompletelyOffTop = y < -50;
 
                 if (windowCompletelyOffRight || windowCompletelyOffLeft || windowCompletelyOffBottom || windowCompletelyOffTop) {
-                    console.log('Window position reset: saved position was off-screen', { x, y });
                     return { x: defaultX, y: defaultY };
                 } else {
-                    console.log('Loaded agent window position from storage:', { x, y });
                     return { x, y };
                 }
             } catch (e) {
@@ -144,7 +142,6 @@ const StoryAgentView: React.FC<StoryAgentViewProps> = ({
     useEffect(() => {
         if (prevDragging.current === true && isDragging === false) {
             // Dragging just ended, save position
-            console.log('Drag ended, saving position:', agentWindowPos);
             localStorage.setItem('story_agent_window_pos', JSON.stringify(agentWindowPos));
         }
         prevDragging.current = isDragging;
