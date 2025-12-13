@@ -17,6 +17,8 @@ interface UsePersistenceProps {
     apiSettings: ApiSettings;
     checkApiKey: () => boolean;
     setActiveTab: (tab: any) => void;
+    currentWorldId: string | undefined;
+    setCurrentWorldId: (id: string | undefined) => void;
 }
 
 export const usePersistence = ({
@@ -24,13 +26,14 @@ export const usePersistence = ({
     storyEngine,
     apiSettings,
     checkApiKey,
-    setActiveTab
+    setActiveTab,
+    currentWorldId,
+    setCurrentWorldId
 }: UsePersistenceProps) => {
     const queryClient = useQueryClient();
     const { user } = useAuth();
 
     // Persistence State
-    const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
     const [worldName, setWorldName] = useState("");
     const [commitMessage, setCommitMessage] = useState("");
 

@@ -15,6 +15,7 @@ interface BrainstormViewProps {
     onSaveSession?: (session: BrainstormSession) => void;
     onAnalysisRequest?: (text: string, action?: 'analyze' | 'explain' | 'expand') => void;
     taskManager?: any;
+    worldId?: string;
 }
 
 const DEFAULT_CONFIG: BrainstormConfig = {
@@ -30,26 +31,63 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
     globalApiSettings,
     onSaveSession,
     onAnalysisRequest,
-    taskManager
+    taskManager,
+    worldId
 }) => {
     const { t } = useTranslation();
     // State
-    const [sessions, setSessions] = useState<BrainstormSession[]>(() => {
-        const saved = localStorage.getItem('ecoNarrative_brainstorm_sessions');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [sessions, setSessions] = useState<BrainstormSession[]>([]);
 
-    // Create a new session if none exists
+    // Load sessions when worldId changes
     useEffect(() => {
-        if (sessions.length === 0) {
-            handleNewSession();
+        if (!worldId) {
+            setSessions([]);
+            return;
         }
-    }, []);
+        const saved = localStorage.getItem(`ecoNarrative_brainstorm_sessions_${worldId}`);
+        let loadedSessions: BrainstormSession[] = [];
+        if (saved) {
+            try {
+                loadedSessions = JSON.parse(saved);
+            } catch (e) {
+                console.error("Failed to parse sessions", e);
+            }
+        }
+
+        if (loadedSessions.length > 0) {
+            setSessions(loadedSessions);
+            // If current active session is not in the loaded list (e.g. switched world), select the first one
+            setActiveSessionId(prev => {
+                if (prev && loadedSessions.find(s => s.id === prev)) return prev;
+                return loadedSessions[0].id;
+            });
+        } else {
+            // Initialize with one session if none found or empty
+            const newSession: BrainstormSession = {
+                id: crypto.randomUUID(),
+                name: `${t('brainstorm_new_session')} 1`,
+                messages: [],
+                config: {
+                    ...DEFAULT_CONFIG,
+                    apiKey: globalApiSettings.apiKey,
+                    provider: globalApiSettings.provider,
+                    baseUrl: globalApiSettings.baseUrl,
+                    model: globalApiSettings.model || DEFAULT_CONFIG.model
+                },
+                createdAt: Date.now(),
+                lastModified: Date.now()
+            };
+            setSessions([newSession]);
+            setActiveSessionId(newSession.id);
+        }
+    }, [worldId, t]); // Depend on worldId
 
     // Persist sessions
     useEffect(() => {
-        localStorage.setItem('ecoNarrative_brainstorm_sessions', JSON.stringify(sessions));
-    }, [sessions]);
+        if (worldId) {
+            localStorage.setItem(`ecoNarrative_brainstorm_sessions_${worldId}`, JSON.stringify(sessions));
+        }
+    }, [sessions, worldId]);
 
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [input, setInput] = useState("");
@@ -193,6 +231,15 @@ const BrainstormView: React.FC<BrainstormViewProps> = ({
     const { handleContextMenu, handleMouseUp, renderMenu } = useWorldAdminMenu({
         onAction: (action, text) => onAnalysisRequest?.(text, action)
     });
+
+    if (!worldId) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
+                <Sparkles className="w-12 h-12 opacity-50" />
+                <p>请先选择或创建一个世界以开始头脑风暴</p>
+            </div>
+        );
+    }
 
     if (!activeSession) {
         return <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>;

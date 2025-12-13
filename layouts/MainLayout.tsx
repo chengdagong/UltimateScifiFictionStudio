@@ -39,6 +39,7 @@ export const MainLayout: React.FC = () => {
       // Restore last active tab from localStorage, default to 'participants'
       return (localStorage.getItem('active_tab') as any) || 'participants';
    });
+   const [currentWorldId, setCurrentWorldId] = useState<string | undefined>(undefined);
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const [showWelcomeModal, setShowWelcomeModal] = useState(true);
    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
@@ -70,7 +71,7 @@ export const MainLayout: React.FC = () => {
 
    const isMinimalUI = apiSettings.minimalUI;
 
-   const taskManager = useAiTaskManager();
+   const taskManager = useAiTaskManager(currentWorldId);
    const worldModel = useWorldModel(apiSettings, checkApiKey, taskManager);
    const storyEngine = useStoryEngine();
    const persistence = usePersistence({
@@ -78,7 +79,9 @@ export const MainLayout: React.FC = () => {
       storyEngine,
       apiSettings,
       checkApiKey,
-      setActiveTab
+      setActiveTab,
+      currentWorldId,
+      setCurrentWorldId
    });
 
    // Auto-close welcome modal when a world is loaded
@@ -371,6 +374,7 @@ export const MainLayout: React.FC = () => {
                         globalApiSettings={apiSettings}
                         onAnalysisRequest={handleRequestAnalysis}
                         taskManager={taskManager}
+                        worldId={currentWorldId}
                      />
                   )}
 
